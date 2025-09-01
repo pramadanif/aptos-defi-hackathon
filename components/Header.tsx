@@ -2,13 +2,43 @@
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Wallet, Search, Menu, TrendingUp } from "lucide-react";
+import { Wallet, Search, Menu, TrendingUp, LogOut } from "lucide-react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
+import { useState, useMemo } from "react";
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { toast } from "sonner";
 
 export function Header() {
   const pathname = usePathname();
+  const { wallets, connect, disconnect, account, connected } = useWallet();
+  const [open, setOpen] = useState(false);
+
+  const shortAddr = useMemo(() => {
+    const addr = account?.address?.toString();
+    return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "";
+  }, [account]);
+
+  async function handleConnect(name: string) {
+    try {
+      await connect(name);
+      toast.success("Wallet connected", { description: name });
+      setOpen(false);
+    } catch (e: any) {
+      toast.error("Failed to connect", { description: e?.message || String(e) });
+    }
+  }
+
+  async function handleDisconnect() {
+    try {
+      await disconnect();
+      toast.success("Disconnected");
+    } catch (e: any) {
+      toast.error("Failed to disconnect", { description: e?.message || String(e) });
+    }
+  }
   return (
     <motion.header 
       className="glass-morphism sticky top-0 z-50 w-full border-b border-primary/20"
@@ -51,15 +81,52 @@ export function Header() {
 
           {/* Wallet & Menu */}
           <div className="flex items-center space-x-3">
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button 
-                variant="outline" 
-                className="bg-gradient-primary border-0 neon-glow-pink hover:neon-glow-cyan transition-all duration-300"
-              >
-                <Wallet className="w-4 h-4 mr-2" />
-                Connect Wallet
-              </Button>
-            </motion.div>
+            {!connected ? (
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                    <Button 
+                      variant="outline" 
+                      className="bg-gradient-primary border-0 neon-glow-pink hover:neon-glow-cyan transition-all duration-300"
+                    >
+                      <Wallet className="w-4 h-4 mr-2" />
+                      Connect Wallet
+                    </Button>
+                  </motion.div>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Connect Wallet</DialogTitle>
+                  </DialogHeader>
+                  <div className="grid gap-2">
+                    {wallets.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No wallets detected. Please install OKX Wallet, Petra, Martian, etc.</p>
+                    )}
+                    {wallets.map((w) => (
+                      <Button key={w.name} variant="outline" className="justify-start" onClick={() => handleConnect(w.name)}>
+                        {w.icon ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={w.icon} alt="" className="w-5 h-5 mr-2" />
+                        ) : (
+                          <Wallet className="w-4 h-4 mr-2" />
+                        )}
+                        {w.name}
+                      </Button>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button variant="outline" className="border-primary/30">
+                  <Wallet className="w-4 h-4 mr-2" />
+                  {shortAddr}
+                </Button>
+                <Button variant="ghost" size="icon" onClick={handleDisconnect} title="Disconnect">
+                  <LogOut className="w-5 h-5" />
+                </Button>
+              </div>
+            )}
             
             <Button variant="ghost" size="icon" className="md:hidden">
               <Menu className="w-5 h-5" />
