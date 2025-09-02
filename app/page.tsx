@@ -5,15 +5,11 @@ import { HeroSection } from "../components/HeroSection";
 import { TrendingSection } from "../components/TrendingSection";
 import { TradingDashboard } from "../components/TradingDashboard";
 import { Footer } from "../components/Footer";
-import { BackgroundParticles } from "../components/BackgroundParticles";
 import { Toaster } from "../components/ui/sonner";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Animated Background Particles */}
-      <BackgroundParticles />
-
+    <div className="min-h-screen">
       {/* Main Content */}
       <Header />
       

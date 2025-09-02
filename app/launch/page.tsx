@@ -2,7 +2,6 @@ import LaunchTokenForm from "../../components/LaunchTokenForm";
 import { Header } from "../../components/Header";
 import { Footer } from "../../components/Footer";
 import { Toaster } from "../../components/ui/sonner";
-import { BackgroundParticles } from "../../components/BackgroundParticles";
 
 export const metadata = {
   title: "Launch Token | Aptos DeFi",
@@ -10,8 +9,7 @@ export const metadata = {
 
 export default function LaunchPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <BackgroundParticles />
+    <div className="min-h-screen">
       <Header />
       <main className="relative z-10">
         <LaunchTokenForm />

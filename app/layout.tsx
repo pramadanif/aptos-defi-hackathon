@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../components/ThemeProvider";
 import AptosWalletProvider from "../components/wallet/AptosWalletProvider";
+import BackgroundLiquidChrome from "../components/BackgroundLiquidChrome";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +29,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AptosWalletProvider>
+          <BackgroundLiquidChrome />
           <ThemeProvider>{children}</ThemeProvider>
         </AptosWalletProvider>
       </body>

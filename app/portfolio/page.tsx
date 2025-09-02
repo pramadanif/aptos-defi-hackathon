@@ -3,7 +3,6 @@
 import { Header } from "../../components/Header";
 import { Footer } from "../../components/Footer";
 import { Toaster } from "../../components/ui/sonner";
-import { BackgroundParticles } from "../../components/BackgroundParticles";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader as UITableHeader, TableRow } from "../../components/ui/table";
 import { Badge } from "../../components/ui/badge";
@@ -23,8 +22,7 @@ export default function PortfolioPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <BackgroundParticles />
+    <div className="min-h-screen">
       <Header />
 
       <main className="relative z-10 py-10">
