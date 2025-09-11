@@ -21,8 +21,23 @@ export function Header() {
     return addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : "";
   }, [account]);
 
+  const installedWallets = useMemo(() => {
+    // Only keep wallets with readyState === "Installed" to avoid deep-link new tabs
+    return wallets.filter((w: any) => w?.readyState === "Installed" || w?.installed === true);
+  }, [wallets]);
+
   async function handleConnect(name: string) {
     try {
+      // Prevent deep-link behavior when wallet is not installed
+      const target: any = wallets.find((w) => w.name === name);
+      const isInstalled = target?.readyState === "Installed" || target?.installed === true;
+      if (!isInstalled) {
+        toast.error("Wallet not installed", {
+          description: "Please install the extension first to open the popup in-page.",
+        });
+        return;
+      }
+
       await connect(name);
       toast.success("Wallet connected", { description: name });
       setOpen(false);
@@ -99,10 +114,10 @@ export function Header() {
                     <DialogTitle>Connect Wallet</DialogTitle>
                   </DialogHeader>
                   <div className="grid gap-2">
-                    {wallets.length === 0 && (
-                      <p className="text-sm text-muted-foreground">No wallets detected. Please install OKX Wallet, Petra, Martian, etc.</p>
+                    {installedWallets.length === 0 && (
+                      <p className="text-sm text-muted-foreground">No wallets detected. Please install Petra, Martian, or OKX Wallet extension.</p>
                     )}
-                    {wallets.map((w) => (
+                    {installedWallets.map((w) => (
                       <Button key={w.name} variant="outline" className="justify-start" onClick={() => handleConnect(w.name)}>
                         {w.icon ? (
                           // eslint-disable-next-line @next/next/no-img-element

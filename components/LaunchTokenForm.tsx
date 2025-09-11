@@ -1,19 +1,121 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Badge } from "./ui/badge";
 import { Rocket, Wallet, ShieldCheck } from "lucide-react";
+import { useWallet } from "@aptos-labs/wallet-adapter-react";
+import { toast } from "sonner";
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
 export default function LaunchTokenForm() {
-  const [network, setNetwork] = useState("solana");
+  // IMPORTANT: Ganti alamat berikut dengan address paket Move Anda yang telah dipublish
+  // Misal: "0x1234abcd..." (tanpa ::token_factory)
+  const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR || "0xBULLPUMP_ADDRESS_HERE";
 
+  const { account, signAndSubmitTransaction, signTransaction } = useWallet() as any;
+  const [name, setName] = useState("");
+  const [symbol, setSymbol] = useState("");
+  const [supply, setSupply] = useState<string>("");
+  const [decimals, setDecimals] = useState<string>("8");
+  const [iconUri, setIconUri] = useState("");
+  const [projectUri, setProjectUri] = useState("");
+  const [mintFee, setMintFee] = useState<string>("");
+  const [preMint, setPreMint] = useState<string>("");
+  const [mintLimit, setMintLimit] = useState<string>("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const NODE_URL = process.env.NEXT_PUBLIC_APTOS_NODE_URL || "https://api.testnet.aptoslabs.com";
+  const FAUCET_URL = process.env.NEXT_PUBLIC_APTOS_FAUCET_URL || "https://faucet.testnet.aptoslabs.com";
+  const READINESS_URL = process.env.NEXT_PUBLIC_APTOS_READINESS_URL || "http://127.0.0.1:8070/";
+  const client = useMemo(() => new Aptos(new AptosConfig({ network: Network.CUSTOM, fullnode: NODE_URL, faucet: FAUCET_URL })), [NODE_URL, FAUCET_URL]);
+
+  async function handleDeploy() {
+    try {
+      if (!account) {
+        toast.error("Connect wallet first");
+        return;
+      }
+      if (!MODULE_ADDR || MODULE_ADDR.includes("_HERE")) {
+        toast.error("MODULE_ADDR not set", { description: "Set NEXT_PUBLIC_MODULE_ADDR in your env" });
+        return;
+      }
+  
+      if (!name.trim()) {
+        toast.error("Token name is required");
+        return;
+      }
+      if (!symbol.trim()) {
+        toast.error("Token symbol is required");
+        return;
+      }
+  
+      setSubmitting(true);
+  
+      // Cek saldo APT
+      try {
+        const balance = await client.getAccountAPTAmount({
+          accountAddress: account.address,
+        });
+        if (balance < 1000000) {
+          toast.error("Insufficient APT balance", {
+            description: "Get APT from faucet: https://faucet.testnet.aptoslabs.com"
+          });
+          return;
+        }
+      } catch (e) {
+        console.warn("Could not check balance:", e);
+      }
+  
+      // ✅ Argumen harus flat, bukan array nested
+      const functionArguments: any[] = [
+        supply && Number(supply) > 0 ? supply.trim() : null,   // Option<u128>
+        name.trim(),                                           // string
+        symbol.trim(),                                         // string
+        Number(decimals || 8),                                 // u8
+        iconUri.trim() || "",                                  // string
+        projectUri.trim() || "",                               // string
+        mintFee && Number(mintFee) > 0 ? mintFee.trim() : null, // Option<u64>
+        preMint && Number(preMint) > 0 ? preMint.trim() : null, // Option<u64>
+        mintLimit && Number(mintLimit) > 0 ? mintLimit.trim() : null, // Option<u64>
+      ];
+  
+      console.log("Function arguments:", functionArguments);
+  
+      const submitted = await signAndSubmitTransaction({
+        sender: account.address,
+        data: {
+          function: `${MODULE_ADDR}::token_factory::create_fa`,
+          typeArguments: [],
+          functionArguments,
+        },
+      } as any);
+  
+      const txHash = submitted.hash as string;
+  
+      toast.info("Submitting transaction...", { description: txHash });
+      await client.waitForTransaction({ transactionHash: txHash! });
+      toast.success("Token created", { description: `Tx: ${txHash}` });
+  
+      // Reset field
+      setName("");
+      setSymbol("");
+      setSupply("");
+      setPreMint("");
+      setMintFee("");
+      setMintLimit("");
+    } catch (e: any) {
+      console.error("Deployment error:", e);
+      toast.error("Failed to deploy", { description: e?.message || String(e) });
+    } finally {
+      setSubmitting(false);
+    }
+  }
   return (
     <section className="py-16">
       <div className="container mx-auto px-4">
@@ -40,43 +142,114 @@ export default function LaunchTokenForm() {
               <CardContent className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="name">Token Name</Label>
-                    <Input id="name" placeholder="Dugems Token" className="bg-muted/20" />
+                    <Label htmlFor="name">Token Name *</Label>
+                    <Input 
+                      id="name" 
+                      placeholder="Dugems Token" 
+                      className="bg-muted/20" 
+                      value={name} 
+                      onChange={(e) => setName(e.target.value)}
+                      required 
+                    />
                   </div>
                   <div>
-                    <Label htmlFor="symbol">Symbol</Label>
-                    <Input id="symbol" placeholder="DGM" className="bg-muted/20" />
+                    <Label htmlFor="symbol">Symbol *</Label>
+                    <Input 
+                      id="symbol" 
+                      placeholder="DGM" 
+                      className="bg-muted/20" 
+                      value={symbol} 
+                      onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                      required 
+                    />
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="supply">Total Supply</Label>
-                    <Input id="supply" placeholder="1000000000" type="number" className="bg-muted/20" />
+                    <Input 
+                      id="supply" 
+                      placeholder="1000000000 (leave empty = uncapped)" 
+                      type="number" 
+                      className="bg-muted/20" 
+                      value={supply} 
+                      onChange={(e) => setSupply(e.target.value)} 
+                    />
                   </div>
                   <div>
                     <Label htmlFor="decimals">Decimals</Label>
-                    <Input id="decimals" placeholder="9" type="number" className="bg-muted/20" />
+                    <Input 
+                      id="decimals" 
+                      placeholder="8" 
+                      type="number" 
+                      min="0" 
+                      max="18" 
+                      className="bg-muted/20" 
+                      value={decimals} 
+                      onChange={(e) => setDecimals(e.target.value)} 
+                    />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Network</Label>
-                    <Select value={network} onValueChange={setNetwork}>
-                      <SelectTrigger className="bg-muted/20">
-                        <SelectValue placeholder="Select network" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="solana">Solana</SelectItem>
-                        <SelectItem value="ethereum">Ethereum</SelectItem>
-                        <SelectItem value="bsc">BNB Chain</SelectItem>
-                        <SelectItem value="polygon">Polygon</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="icon">Icon URI</Label>
+                    <Input 
+                      id="icon" 
+                      placeholder="https://..." 
+                      className="bg-muted/20" 
+                      value={iconUri} 
+                      onChange={(e) => setIconUri(e.target.value)} 
+                    />
                   </div>
                   <div>
-                    <Label htmlFor="owner">Owner wallet</Label>
-                    <Input id="owner" placeholder="Your wallet address" className="bg-muted/20" />
+                    <Label htmlFor="project">Project URI</Label>
+                    <Input 
+                      id="project" 
+                      placeholder="https://..." 
+                      className="bg-muted/20" 
+                      value={projectUri} 
+                      onChange={(e) => setProjectUri(e.target.value)} 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="mintfee">Mint Fee (octas per token)</Label>
+                    <Input 
+                      id="mintfee" 
+                      placeholder="0" 
+                      type="number" 
+                      min="0"
+                      className="bg-muted/20" 
+                      value={mintFee} 
+                      onChange={(e) => setMintFee(e.target.value)} 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="premint">Pre-mint Amount</Label>
+                    <Input 
+                      id="premint" 
+                      placeholder="0" 
+                      type="number" 
+                      min="0"
+                      className="bg-muted/20" 
+                      value={preMint} 
+                      onChange={(e) => setPreMint(e.target.value)} 
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="mintlimit">Mint Limit per Address</Label>
+                    <Input 
+                      id="mintlimit" 
+                      placeholder="(optional)" 
+                      type="number" 
+                      min="0"
+                      className="bg-muted/20" 
+                      value={mintLimit} 
+                      onChange={(e) => setMintLimit(e.target.value)} 
+                    />
                   </div>
                 </div>
 
@@ -85,8 +258,13 @@ export default function LaunchTokenForm() {
                     <ShieldCheck className="w-4 h-4" />
                     Verified template, upgradeable disabled by default
                   </div>
-                  <Button className="bg-gradient-primary border-0 neon-glow-pink">
-                    <Wallet className="w-4 h-4 mr-2" /> Deploy token
+                  <Button 
+                    className="bg-gradient-primary border-0 neon-glow-pink" 
+                    onClick={handleDeploy} 
+                    disabled={submitting || !name.trim() || !symbol.trim()}
+                  >
+                    <Wallet className="w-4 h-4 mr-2" /> 
+                    {submitting ? "Deploying..." : "Deploy token"}
                   </Button>
                 </div>
               </CardContent>
@@ -101,7 +279,9 @@ export default function LaunchTokenForm() {
               <CardContent className="space-y-4">
                 <div className="rounded-xl p-4 bg-muted/20">
                   <div className="text-sm text-muted-foreground">Estimated deployment fee</div>
-                  <div className="text-2xl font-semibold">~ 0.0021 {network === "solana" ? "SOL" : network === "ethereum" ? "ETH" : network === "bsc" ? "BNB" : "MATIC"}</div>
+                  <div className="text-2xl font-semibold">Network: Aptos (TESTNET)</div>
+                  <div className="text-xs text-muted-foreground break-all">Node: {NODE_URL}</div>
+                  <div className="text-xs text-muted-foreground break-all">Readiness: {READINESS_URL}</div>
                 </div>
                 <div className="text-sm text-muted-foreground">
                   Fees vary by network and congestion. You will confirm the transaction in your wallet.
