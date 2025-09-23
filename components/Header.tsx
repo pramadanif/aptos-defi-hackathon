@@ -81,6 +81,7 @@ export function Header() {
           <nav className="hidden md:flex items-center space-x-6">
             <NavLink href="/" currentPath={pathname}>Trade</NavLink>
             <NavLink href="/launch" currentPath={pathname}>Launch</NavLink>
+            <NavLink href="/bonding-curve" currentPath={pathname}>Bonding Curve</NavLink>
             <NavLink href="/portfolio" currentPath={pathname}>Portfolio</NavLink>
             <NavLink href="#" currentPath={pathname}>Analytics</NavLink>
           </nav>

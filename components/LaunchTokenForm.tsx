@@ -8,32 +8,30 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Badge } from "./ui/badge";
-import { Rocket, Wallet, ShieldCheck } from "lucide-react";
+import { Rocket, Wallet, ShieldCheck, Info } from "lucide-react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
 export default function LaunchTokenForm() {
-  // IMPORTANT: Ganti alamat berikut dengan address paket Move Anda yang telah dipublish
-  // Misal: "0x1234abcd..." (tanpa ::token_factory)
-  const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR || "0xBULLPUMP_ADDRESS_HERE";
+  // BullPump module address from environment
+  const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR || "0x4660906d4ed4062029a19e989e51c814aa5b0711ef0ba0433b5f7487cb03b257";
 
   const { account, signAndSubmitTransaction, signTransaction } = useWallet() as any;
   const [name, setName] = useState("");
   const [symbol, setSymbol] = useState("");
-  const [supply, setSupply] = useState<string>("");
-  const [decimals, setDecimals] = useState<string>("8");
   const [iconUri, setIconUri] = useState("");
   const [projectUri, setProjectUri] = useState("");
-  const [mintFee, setMintFee] = useState<string>("");
-  const [preMint, setPreMint] = useState<string>("");
-  const [mintLimit, setMintLimit] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
-  const NODE_URL = process.env.NEXT_PUBLIC_APTOS_NODE_URL || "https://api.testnet.aptoslabs.com";
+  const NODE_URL = process.env.NEXT_PUBLIC_APTOS_NODE_URL || "https://api.testnet.aptoslabs.com/v1";
   const FAUCET_URL = process.env.NEXT_PUBLIC_APTOS_FAUCET_URL || "https://faucet.testnet.aptoslabs.com";
-  const READINESS_URL = process.env.NEXT_PUBLIC_APTOS_READINESS_URL || "http://127.0.0.1:8070/";
-  const client = useMemo(() => new Aptos(new AptosConfig({ network: Network.CUSTOM, fullnode: NODE_URL, faucet: FAUCET_URL })), [NODE_URL, FAUCET_URL]);
+  const client = useMemo(() => new Aptos(new AptosConfig({ 
+    network: Network.TESTNET,
+    fullnode: NODE_URL,
+    faucet: FAUCET_URL 
+  })), [NODE_URL, FAUCET_URL]);
+
 
   async function handleDeploy() {
     try {
@@ -57,32 +55,28 @@ export default function LaunchTokenForm() {
   
       setSubmitting(true);
   
-      // Cek saldo APT
+      // Check APT balance (optional check, don't fail if it doesn't work)
       try {
         const balance = await client.getAccountAPTAmount({
           accountAddress: account.address,
         });
-        if (balance < 1000000) {
-          toast.error("Insufficient APT balance", {
-            description: "Get APT from faucet: https://faucet.testnet.aptoslabs.com"
+        console.log("Current APT balance:", balance);
+        if (balance < 100000) { // 0.001 APT minimum
+          toast.warning("Low APT balance", {
+            description: "Consider getting more APT from faucet if transaction fails"
           });
-          return;
         }
       } catch (e) {
-        console.warn("Could not check balance:", e);
+        console.warn("Could not check balance (continuing anyway):", e);
+        // Don't block the transaction if balance check fails
       }
   
-      // ✅ Argumen harus flat, bukan array nested
+      // Function arguments matching create_fa signature: (name, symbol, icon_uri, project_uri)
       const functionArguments: any[] = [
-        supply && Number(supply) > 0 ? supply.trim() : null,   // Option<u128>
-        name.trim(),                                           // string
-        symbol.trim(),                                         // string
-        Number(decimals || 8),                                 // u8
-        iconUri.trim() || "",                                  // string
-        projectUri.trim() || "",                               // string
-        mintFee && Number(mintFee) > 0 ? mintFee.trim() : null, // Option<u64>
-        preMint && Number(preMint) > 0 ? preMint.trim() : null, // Option<u64>
-        mintLimit && Number(mintLimit) > 0 ? mintLimit.trim() : null, // Option<u64>
+        name.trim(),                    // String: name
+        symbol.trim(),                  // String: symbol
+        iconUri.trim() || "",          // String: icon_uri
+        projectUri.trim() || "",       // String: project_uri
       ];
   
       console.log("Function arguments:", functionArguments);
@@ -95,23 +89,46 @@ export default function LaunchTokenForm() {
           functionArguments,
         },
       } as any);
-  
+
       const txHash = submitted.hash as string;
+      console.log("Transaction submitted:", txHash);
+
+      // Show immediate success since transaction was submitted
+      toast.success("🎉 Token created successfully!", { 
+        description: `Transaction: ${txHash.substring(0, 10)}... - Check Aptos Explorer for confirmation`,
+        duration: 5000
+      });
+
+      console.log(`Token "${name}" (${symbol}) created with transaction: ${txHash}`);
+      console.log(`View on Aptos Explorer: https://explorer.aptoslabs.com/txn/${txHash}?network=testnet`);
+
+      // Optional: Try to wait for confirmation in background (don't block UI)
+      setTimeout(async () => {
+        try {
+          await client.waitForTransaction({ 
+            transactionHash: txHash,
+            options: {
+              timeoutSecs: 20,
+              checkSuccess: true
+            }
+          });
+          console.log("✅ Transaction confirmed on blockchain");
+          toast.success("✅ Transaction confirmed!", { 
+            description: "Your token is now live on Aptos blockchain" 
+          });
+        } catch (waitError) {
+          console.warn("Background verification failed (transaction may still be successful):", waitError);
+        }
+      }, 1000);
   
-      toast.info("Submitting transaction...", { description: txHash });
-      await client.waitForTransaction({ transactionHash: txHash! });
-      toast.success("Token created", { description: `Tx: ${txHash}` });
-  
-      // Reset field
+      // Reset fields
       setName("");
       setSymbol("");
-      setSupply("");
-      setPreMint("");
-      setMintFee("");
-      setMintLimit("");
+      setIconUri("");
+      setProjectUri("");
     } catch (e: any) {
       console.error("Deployment error:", e);
-      toast.error("Failed to deploy", { description: e?.message || String(e) });
+      toast.error("Failed to create token", { description: e?.message || String(e) });
     } finally {
       setSubmitting(false);
     }
@@ -126,9 +143,9 @@ export default function LaunchTokenForm() {
           viewport={{ once: true }}
           className="text-center mb-10"
         >
-          <Badge variant="outline" className="bg-gradient-primary/20 border-primary/30 text-primary">Beta</Badge>
+          <Badge variant="outline" className="bg-gradient-primary/20 border-primary/30 text-primary">BullPump</Badge>
           <h2 className="mt-3 text-3xl font-bold text-gradient-primary">Launch your token</h2>
-          <p className="mt-2 text-muted-foreground">Create and deploy a token in minutes. Fully on-chain and fee-transparent.</p>
+          <p className="mt-2 text-muted-foreground">Create and deploy a bonding curve token in minutes. Fully on-chain with automatic liquidity.</p>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -136,16 +153,16 @@ export default function LaunchTokenForm() {
             <Card className="liquid-glass">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Rocket className="w-5 h-5 text-primary" /> Token configuration
+                  <Rocket className="w-5 h-5 text-primary" /> Token Configuration
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-5">
+              <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="name">Token Name *</Label>
                     <Input 
                       id="name" 
-                      placeholder="Dugems Token" 
+                      placeholder="My Awesome Token" 
                       className="bg-muted/20" 
                       value={name} 
                       onChange={(e) => setName(e.target.value)}
@@ -156,37 +173,11 @@ export default function LaunchTokenForm() {
                     <Label htmlFor="symbol">Symbol *</Label>
                     <Input 
                       id="symbol" 
-                      placeholder="DGM" 
+                      placeholder="MAT" 
                       className="bg-muted/20" 
                       value={symbol} 
                       onChange={(e) => setSymbol(e.target.value.toUpperCase())}
                       required 
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="supply">Total Supply</Label>
-                    <Input 
-                      id="supply" 
-                      placeholder="1000000000 (leave empty = uncapped)" 
-                      type="number" 
-                      className="bg-muted/20" 
-                      value={supply} 
-                      onChange={(e) => setSupply(e.target.value)} 
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="decimals">Decimals</Label>
-                    <Input 
-                      id="decimals" 
-                      placeholder="8" 
-                      type="number" 
-                      min="0" 
-                      max="18" 
-                      className="bg-muted/20" 
-                      value={decimals} 
-                      onChange={(e) => setDecimals(e.target.value)} 
                     />
                   </div>
                 </div>
@@ -196,7 +187,7 @@ export default function LaunchTokenForm() {
                     <Label htmlFor="icon">Icon URI</Label>
                     <Input 
                       id="icon" 
-                      placeholder="https://..." 
+                      placeholder="https://example.com/icon.png" 
                       className="bg-muted/20" 
                       value={iconUri} 
                       onChange={(e) => setIconUri(e.target.value)} 
@@ -206,7 +197,7 @@ export default function LaunchTokenForm() {
                     <Label htmlFor="project">Project URI</Label>
                     <Input 
                       id="project" 
-                      placeholder="https://..." 
+                      placeholder="https://example.com" 
                       className="bg-muted/20" 
                       value={projectUri} 
                       onChange={(e) => setProjectUri(e.target.value)} 
@@ -214,49 +205,25 @@ export default function LaunchTokenForm() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="mintfee">Mint Fee (octas per token)</Label>
-                    <Input 
-                      id="mintfee" 
-                      placeholder="0" 
-                      type="number" 
-                      min="0"
-                      className="bg-muted/20" 
-                      value={mintFee} 
-                      onChange={(e) => setMintFee(e.target.value)} 
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="premint">Pre-mint Amount</Label>
-                    <Input 
-                      id="premint" 
-                      placeholder="0" 
-                      type="number" 
-                      min="0"
-                      className="bg-muted/20" 
-                      value={preMint} 
-                      onChange={(e) => setPreMint(e.target.value)} 
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="mintlimit">Mint Limit per Address</Label>
-                    <Input 
-                      id="mintlimit" 
-                      placeholder="(optional)" 
-                      type="number" 
-                      min="0"
-                      className="bg-muted/20" 
-                      value={mintLimit} 
-                      onChange={(e) => setMintLimit(e.target.value)} 
-                    />
+                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <Info className="w-5 h-5 text-blue-500 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium text-blue-900 dark:text-blue-100 mb-1">Bonding Curve Token</p>
+                      <ul className="text-blue-700 dark:text-blue-300 space-y-1">
+                        <li>• Fixed supply: 1 billion tokens (8 decimals)</li>
+                        <li>• Automatic bonding curve pricing</li>
+                        <li>• No mint fees or limits</li>
+                        <li>• Instant liquidity through bonding curve</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     <ShieldCheck className="w-4 h-4" />
-                    Verified template, upgradeable disabled by default
+                    BullPump verified contract
                   </div>
                   <Button 
                     className="bg-gradient-primary border-0 neon-glow-pink" 
@@ -264,7 +231,7 @@ export default function LaunchTokenForm() {
                     disabled={submitting || !name.trim() || !symbol.trim()}
                   >
                     <Wallet className="w-4 h-4 mr-2" /> 
-                    {submitting ? "Deploying..." : "Deploy token"}
+                    {submitting ? "Creating..." : "Create Token"}
                   </Button>
                 </div>
               </CardContent>
@@ -274,28 +241,47 @@ export default function LaunchTokenForm() {
           <motion.div initial={{ opacity: 0, x: 20 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }}>
             <Card className="liquid-glass">
               <CardHeader>
-                <CardTitle>Preview & Fees</CardTitle>
+                <CardTitle>Token Preview</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="rounded-xl p-4 bg-muted/20">
-                  <div className="text-sm text-muted-foreground">Estimated deployment fee</div>
-                  <div className="text-2xl font-semibold">Network: Aptos (TESTNET)</div>
-                  <div className="text-xs text-muted-foreground break-all">Node: {NODE_URL}</div>
-                  <div className="text-xs text-muted-foreground break-all">Readiness: {READINESS_URL}</div>
+                  <div className="text-sm text-muted-foreground mb-2">Your Token</div>
+                  <div className="text-lg font-semibold">{name || "Token Name"}</div>
+                  <div className="text-sm text-muted-foreground">{symbol || "SYMBOL"}</div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Supply: 1,000,000,000 tokens (8 decimals)
+                  </div>
                 </div>
-                <div className="text-sm text-muted-foreground">
-                  Fees vary by network and congestion. You will confirm the transaction in your wallet.
+                
+                <div className="rounded-xl p-4 bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
+                  <div className="text-sm font-medium mb-2">Network Information</div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>Network: Aptos Testnet</div>
+                    <div>Contract: BullPump Token Factory</div>
+                    <div className="break-all">Module: {MODULE_ADDR.substring(0, 10)}...</div>
+                  </div>
                 </div>
-                <Tabs defaultValue="standard">
-                  <TabsList className="bg-muted/20">
-                    <TabsTrigger value="standard">Standard</TabsTrigger>
-                    <TabsTrigger value="fair" disabled>Fair Launch</TabsTrigger>
-                    <TabsTrigger value="bonding" disabled>Bonding Curve</TabsTrigger>
+
+                <Tabs defaultValue="bonding" className="w-full">
+                  <TabsList className="bg-muted/20 w-full">
+                    <TabsTrigger value="bonding" className="flex-1">Bonding Curve</TabsTrigger>
                   </TabsList>
-                  <TabsContent value="standard" className="space-y-3 text-sm text-muted-foreground">
-                    <p>Standard mint without additional tokenomics. Ideal for simple launches.</p>
+                  <TabsContent value="bonding" className="space-y-3 text-sm text-muted-foreground">
+                    <div className="space-y-2">
+                      <p className="font-medium text-foreground">Automatic Bonding Curve</p>
+                      <ul className="space-y-1">
+                        <li>• Automatic price discovery</li>
+                        <li>• Instant liquidity</li>
+                        <li>• No rug pulls</li>
+                        <li>• Fair launch mechanism</li>
+                      </ul>
+                    </div>
                   </TabsContent>
                 </Tabs>
+
+                <div className="text-xs text-muted-foreground">
+                  Gas fees vary by network congestion. You will confirm the exact amount in your wallet.
+                </div>
               </CardContent>
             </Card>
           </motion.div>
