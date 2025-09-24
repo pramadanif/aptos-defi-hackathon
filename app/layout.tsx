@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aptos DeFi",
-  description: "Aptos DeFi - decentralized finance on Aptos",
+  title: "BullPump",
+  description: "BullPump - The ultimate bonding curve token launchpad on Aptos",
 };
 
 export default function RootLayout({

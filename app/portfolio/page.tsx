@@ -33,6 +33,10 @@ interface CoinInfo {
 }
 
 export default function PortfolioPage() {
+  useEffect(() => {
+    document.title = "Portfolio | BullPump";
+  }, []);
+
   const { account, connected } = useWallet();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -223,7 +227,12 @@ export default function PortfolioPage() {
       ];
 
       // Get BullPump tokens from registry
-      const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR || "0x4660906d4ed4062029a19e989e51c814aa5b0711ef0ba0433b5f7487cb03b257";
+      const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR;
+      
+      if (!MODULE_ADDR) {
+        console.warn("NEXT_PUBLIC_MODULE_ADDR not configured, skipping BullPump tokens");
+        return knownAssets;
+      }
       
       try {
         const registry = await aptos.view({

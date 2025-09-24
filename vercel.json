@@ -1,0 +1,22 @@
+{
+  "functions": {
+    "app/api/indexer/start/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/indexer/cron/route.ts": {
+      "maxDuration": 300
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/indexer/cron",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "env": {
+    "DATABASE_URL": "@database_url",
+    "DIRECT_URL": "@direct_url",
+    "APTOS_NODE_URL": "@aptos_node_url",
+    "BULLPUMP_CONTRACT_ADDRESS": "@bullpump_contract_address"
+  }
+}

@@ -4,7 +4,7 @@ import { Footer } from "../../components/Footer";
 import { Toaster } from "../../components/ui/sonner";
 
 export const metadata = {
-  title: "Launch Token | Aptos DeFi",
+  title: "Launch Token | BullPump",
 };
 
 export default function LaunchPage() {

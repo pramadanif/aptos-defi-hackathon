@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { TrendingUp, Twitter, Github, MessageCircle, Mail } from "lucide-react";
+import Image from "next/image";
 
 export function Footer() {
   return (
@@ -17,11 +18,17 @@ export function Footer() {
             className="col-span-1 md:col-span-2"
           >
             <div className="flex items-center space-x-2 mb-4">
-              <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center neon-glow-pink">
-                <TrendingUp className="w-5 h-5 text-white" />
+              <div className="w-8 h-8 rounded-lg overflow-hidden">
+                <Image 
+                  src="/BULLPUMP_FIX.png" 
+                  alt="BullPump Logo" 
+                  width={32} 
+                  height={32}
+                  className="w-full h-full object-contain"
+                />
               </div>
               <h3 className="text-xl font-bold text-gradient-primary">
-                Helen's Mart
+                BullPump
               </h3>
             </div>
             <p className="text-muted-foreground mb-6 max-w-md">
@@ -80,7 +87,7 @@ export function Footer() {
           className="border-t border-primary/20 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center"
         >
           <p className="text-muted-foreground text-sm">
-            © 2024 Helen's Night Mart. All rights reserved.
+            © 2024 BullPump. All rights reserved.
           </p>
           <div className="flex space-x-6 mt-4 md:mt-0">
             <FooterLink href="#" className="text-sm">Privacy Policy</FooterLink>

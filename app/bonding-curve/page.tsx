@@ -4,8 +4,12 @@ import { Header } from "../../components/Header";
 import { Footer } from "../../components/Footer";
 import { BondingCurveTrading } from "../../components/BondingCurveTrading";
 import { Toaster } from "../../components/ui/sonner";
+import { useEffect } from "react";
 
 export default function BondingCurvePage() {
+  useEffect(() => {
+    document.title = "Trading | BullPump";
+  }, []);
   return (
     <div className="min-h-screen">
       <Header />

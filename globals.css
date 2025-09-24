@@ -5,7 +5,7 @@
   
   /* Helen's Night Mart Color Palette */
   --deep-navy: #1a1f2e;
-  --electric-pink: #ff006e;
+  --electric-pink: #ea448c;
   --bright-cyan: #00f5ff;
   --neon-green: #39ff14;
   --warm-orange: #ff8500;
@@ -173,11 +173,11 @@
   }
   
   .bg-gradient-primary {
-    background: linear-gradient(135deg, var(--electric-pink) 0%, var(--bright-cyan) 100%);
+    background: var(--electric-pink);
   }
   
   .bg-gradient-secondary {
-    background: linear-gradient(135deg, var(--neon-green) 0%, var(--warm-orange) 100%);
+    background: var(--bright-cyan);
   }
 }
 
