@@ -15,7 +15,7 @@ export default function AptosWalletProvider({ children }: { children: ReactNode 
   };
   
   // Whitelist extension wallets; cast to any to avoid mismatch with AvailableWallets typings across versions
-  const OPT_IN_WALLETS = ["Petra", "Martian", "OKX Wallet"] as unknown as any;
+  const OPT_IN_WALLETS = ["Petra", "Martian", "Martian Wallet", "OKX Wallet", "Pontem Wallet"] as unknown as any;
 
   return (
     <AptosWalletAdapterProvider

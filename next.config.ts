@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   // Vercel configuration
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
+  },
+  images: {
+    domains: ['img.freepik.com', 'images.unsplash.com', 'plus.unsplash.com'],
   }
 };
 

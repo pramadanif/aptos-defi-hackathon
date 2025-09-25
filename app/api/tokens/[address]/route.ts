@@ -4,10 +4,10 @@ import { prisma } from '@/lib/prisma';
 // GET /api/tokens/:address - Token detail + recent trades
 export async function GET(
   request: NextRequest,
-  { params }: { params: { address: string } }
+  { params }: { params: Promise<{ address: string }> }
 ) {
   try {
-    const { address } = params;
+    const { address } = await params;
     
     const token = await prisma.fA.findUnique({
       where: { address },

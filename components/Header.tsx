@@ -2,13 +2,14 @@
 
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { TrendingUp, Menu, X, Wallet, Search, LogOut, Sparkles } from "lucide-react";
+import { TrendingUp, Menu, X, Wallet, Search, LogOut, Sparkles, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./ui/dialog";
-import { useState, useMemo } from "react";
+// Removed unused Command and Popover imports
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
 
@@ -17,6 +18,11 @@ export function Header() {
   const { wallets, connect, disconnect, account, connected } = useWallet();
   const [open, setOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const shortAddr = useMemo(() => {
     const addr = account?.address?.toString();
@@ -56,6 +62,62 @@ export function Header() {
       toast.error("Failed to disconnect", { description: e?.message || String(e) });
     }
   }
+
+  // Search functionality
+  const performSearch = async (query: string) => {
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const response = await fetch(`/api/tokens/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setSearchResults(data.data || []);
+      } else {
+        setSearchResults([]);
+        toast.error("Search failed", { description: data.error });
+      }
+    } catch (error) {
+      console.error("Search error:", error);
+      setSearchResults([]);
+      toast.error("Search failed", { description: "Network error" });
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Debounced search
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      if (searchQuery) {
+        performSearch(searchQuery);
+      } else {
+        setSearchResults([]);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  const handleSearchSelect = (token: any) => {
+    setSearchOpen(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    // Navigate to token detail page
+    window.location.href = `/coin/${token.address}`;
+  };
 
   return (
     <motion.header 
@@ -177,30 +239,116 @@ export function Header() {
             <NavLink href="/portfolio" currentPath={pathname}>Portfolio</NavLink>
           </nav>
 
-          {/* Enhanced Search Bar */}
-          <motion.div 
-            className="hidden lg:flex items-center relative group"
-            whileHover={{ scale: 1.02 }}
-            transition={{ type: "spring", stiffness: 300 }}
-          >
-            <motion.div
-              className="absolute left-3 z-10"
-              whileHover={{ scale: 1.1, rotate: 15 }}
-              transition={{ type: "spring", stiffness: 400 }}
-            >
-              <Search className="w-4 h-4 text-purple-400 group-hover:text-pink-400 transition-colors duration-300" />
-            </motion.div>
-            <Input 
-              placeholder="Search tokens..." 
-              className="pl-10 w-64 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl
-                         focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20
-                         hover:bg-white/15 transition-all duration-300
-                         placeholder:text-white/60 text-white"
-              style={{
-                background: "linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(168,85,247,0.05) 100%)"
-              }}
-            />
-          </motion.div>
+          {/* Enhanced Search Bar with Autocomplete */}
+          <div className="hidden lg:flex items-center relative">
+            <div className="relative">
+              <motion.div
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 z-10"
+                whileHover={{ scale: 1.1, rotate: 15 }}
+                transition={{ type: "spring", stiffness: 400 }}
+              >
+                <Search className="w-4 h-4 text-purple-400 transition-colors duration-300" />
+              </motion.div>
+              <Input 
+                placeholder="Search tokens..." 
+                className="pl-10 w-64 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl
+                           focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20
+                           hover:bg-white/15 transition-all duration-300
+                           placeholder:text-white/60 text-white"
+                style={{
+                  background: "linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(168,85,247,0.05) 100%)"
+                }}
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (e.target.value.length >= 2) {
+                    setSearchOpen(true);
+                  } else {
+                    setSearchOpen(false);
+                  }
+                }}
+                onFocus={() => {
+                  if (searchQuery.length >= 2) {
+                    setSearchOpen(true);
+                  }
+                }}
+                onBlur={() => {
+                  // Delay closing to allow clicking on results
+                  setTimeout(() => setSearchOpen(false), 200);
+                }}
+              />
+              
+              {/* Search Results Dropdown */}
+              {searchOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-xl border border-white/20 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto">
+                  {searchLoading ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                      <span className="ml-2 text-sm text-white/60">Searching...</span>
+                    </div>
+                  ) : searchResults.length > 0 ? (
+                    <div className="p-2">
+                      <div className="text-xs text-white/40 px-3 py-2 font-medium">Tokens</div>
+                      {searchResults.map((token) => (
+                        <div
+                          key={token.address}
+                          className="flex items-center gap-3 p-3 cursor-pointer hover:bg-white/10 rounded-lg text-white transition-colors"
+                          onClick={() => handleSearchSelect(token)}
+                        >
+                          <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-r from-purple-500 to-pink-500 flex items-center justify-center text-white font-semibold text-sm relative">
+                            {token.iconUri ? (
+                              <>
+                                <img 
+                                  src={token.iconUri} 
+                                  alt={token.symbol} 
+                                  className="w-full h-full object-cover absolute inset-0"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = 'none';
+                                  }}
+                                />
+                                <span className="flex items-center justify-center w-full h-full">
+                                  {token.symbol?.charAt(0) || '?'}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="flex items-center justify-center w-full h-full">
+                                {token.symbol?.charAt(0) || '?'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium">{token.symbol || 'Unknown'}</div>
+                            <div className="text-xs text-white/60">{token.name || 'Unknown Token'}</div>
+                            {token.tradeCount > 0 && (
+                              <div className="text-xs text-purple-400">{token.tradeCount} trades</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {token.currentPrice > 0 && (
+                              <div className="text-sm font-medium text-green-400">
+                                ${token.currentPrice.toFixed(8)}
+                              </div>
+                            )}
+                            {token.isGraduated && (
+                              <div className="text-xs text-yellow-400">Graduated</div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : searchQuery.length >= 2 ? (
+                    <div className="py-6 text-center text-white/60">
+                      No tokens found for "{searchQuery}"
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-white/60 text-sm">
+                      Type at least 2 characters to search...
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Enhanced Wallet & Menu */}
           <div className="flex items-center space-x-3">

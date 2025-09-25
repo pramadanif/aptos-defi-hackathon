@@ -8,7 +8,7 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Badge } from "./ui/badge";
-import { Rocket, Wallet, ShieldCheck, Info, ExternalLink, Sparkles, Zap, TrendingUp } from "lucide-react";
+import { Rocket, Wallet, ShieldCheck, Info, ExternalLink, Sparkles, Zap, TrendingUp, AlertTriangle } from "lucide-react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
@@ -28,6 +28,7 @@ export default function LaunchTokenForm() {
   const [projectUri, setProjectUri] = useState("");
   const [initialBuyAmount, setInitialBuyAmount] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [iconUrlWarning, setIconUrlWarning] = useState("");
 
   const NODE_URL = process.env.NEXT_PUBLIC_APTOS_NODE_URL || "https://api.testnet.aptoslabs.com/v1";
   const FAUCET_URL = process.env.NEXT_PUBLIC_APTOS_FAUCET_URL || "https://faucet.testnet.aptoslabs.com";
@@ -37,23 +38,30 @@ export default function LaunchTokenForm() {
     faucet: FAUCET_URL 
   })), [NODE_URL, FAUCET_URL]);
 
-  // Motion values for interactive animations
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useTransform(mouseY, [-300, 300], [10, -10]);
-  const rotateY = useTransform(mouseX, [-300, 300], [-10, 10]);
+  // Removed motion values and mouse handlers for card animations
 
-  const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    mouseX.set(e.clientX - centerX);
-    mouseY.set(e.clientY - centerY);
+  // Function to validate Unsplash URLs
+  const validateIconUrl = (url: string) => {
+    if (!url.trim()) {
+      setIconUrlWarning("");
+      return;
+    }
+
+    const isUnsplashUrl = url.includes('unsplash.com') || 
+                         url.includes('images.unsplash.com') || 
+                         url.includes('plus.unsplash.com');
+    
+    if (!isUnsplashUrl) {
+      setIconUrlWarning("⚠️ Only Unsplash images are recommended to prevent broken icons");
+    } else {
+      setIconUrlWarning("");
+    }
   };
 
-  const handleMouseLeave = () => {
-    mouseX.set(0);
-    mouseY.set(0);
+  // Handle icon URI change with validation
+  const handleIconUriChange = (value: string) => {
+    setIconUri(value);
+    validateIconUrl(value);
   };
 
   async function handleDeploy() {
@@ -107,13 +115,13 @@ export default function LaunchTokenForm() {
           initialBuyAmountOctas          // u64: amount_creator_buy (Some value)
         ];
       } else {
-        // For Option<u64> None, we omit the last parameter or pass empty vector
+        // For Option<u64> None, use {"vec": []} format as shown in successful transaction
         functionArguments = [
           name.trim(),                    // String: name
           symbol.trim(),                  // String: symbol
           iconUri.trim() || "",          // String: icon_uri
           projectUri.trim() || "",       // String: project_uri
-          []                             // Empty vector for Option::none()
+          { "vec": [] }                  // Empty vector for Option::none()
         ];
       }
   
@@ -187,7 +195,29 @@ export default function LaunchTokenForm() {
       setProjectUri("");
     } catch (e: any) {
       console.error("Deployment error:", e);
-      toast.error("Failed to create token", { description: e?.message || String(e) });
+      
+      // Handle specific error cases
+      let errorMessage = "Failed to create token";
+      let errorDescription = e?.message || String(e);
+      
+      // Check for user rejection
+      if (e?.message?.includes("User rejected") || 
+          e?.message?.includes("rejected") ||
+          e?.message?.includes("cancelled") ||
+          e?.message?.includes("denied") ||
+          e?.code === 4001 || // Standard rejection code
+          e?.code === "USER_REJECTED") {
+        errorMessage = "Transaction cancelled";
+        errorDescription = "You cancelled the transaction. No tokens were created.";
+      } else if (e?.message?.includes("insufficient")) {
+        errorMessage = "Insufficient balance";
+        errorDescription = "You don't have enough APT to complete this transaction.";
+      } else if (e?.message?.includes("network") || e?.message?.includes("timeout")) {
+        errorMessage = "Network error";
+        errorDescription = "Please check your connection and try again.";
+      }
+      
+      toast.error(errorMessage, { description: errorDescription });
     } finally {
       setSubmitting(false);
     }
@@ -264,13 +294,7 @@ export default function LaunchTokenForm() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <motion.div
-              style={{ rotateX, rotateY }}
-              onMouseMove={handleMouseMove}
-              onMouseLeave={handleMouseLeave}
-              className="perspective-1000"
-            >
-              <Card className="liquid-glass backdrop-blur-xl bg-gradient-to-br from-white/5 to-white/10 border border-white/20 shadow-2xl">
+            <Card className="liquid-glass backdrop-blur-xl bg-gradient-to-br from-white/5 to-white/10 border border-white/20 shadow-2xl">
                 <CardHeader className="relative">
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-t-lg" />
                   <CardTitle className="flex items-center gap-3 relative z-10">
@@ -352,17 +376,38 @@ export default function LaunchTokenForm() {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
+                    <div className="relative">
                       <Label htmlFor="icon" className="text-sm font-medium text-foreground/80 mb-2 block">
-                        Icon URI (Optional)
+                        Icon URI (Unsplash Only)
                       </Label>
                       <Input 
                         id="icon" 
-                        placeholder="https://example.com/icon.png" 
-                        className="bg-white/5 border-white/10 focus:border-purple-400/50 focus:ring-purple-400/20 transition-all duration-300" 
+                        placeholder="https://images.unsplash.com/photo-..." 
+                        className={`bg-white/5 border-white/10 focus:border-purple-400/50 focus:ring-purple-400/20 transition-all duration-300 ${
+                          iconUrlWarning ? 'border-yellow-500/50' : ''
+                        }`}
                         value={iconUri} 
-                        onChange={(e) => setIconUri(e.target.value)} 
+                        onChange={(e) => handleIconUriChange(e.target.value)} 
                       />
+                      {iconUrlWarning && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="absolute -bottom-8 left-0 text-xs text-yellow-400 flex items-center gap-1"
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          {iconUrlWarning}
+                        </motion.div>
+                      )}
+                      {iconUri && !iconUrlWarning && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="absolute -bottom-6 left-0 text-xs text-green-400"
+                        >
+                          ✓ Unsplash URL looks good!
+                        </motion.div>
+                      )}
                     </div>
                     <div>
                       <Label htmlFor="project" className="text-sm font-medium text-foreground/80 mb-2 block">
@@ -436,6 +481,23 @@ export default function LaunchTokenForm() {
                     </div>
                   </motion.div>
 
+                  <motion.div 
+                    className="bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl p-4"
+                    whileHover={{ scale: 1.02 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-semibold text-yellow-200 mb-1">Icon URL Guidelines</p>
+                        <p className="text-yellow-300/80 text-sm">
+                          Use only Unsplash images (images.unsplash.com) for token icons to ensure reliability and prevent broken images. 
+                          Other image sources may cause display issues.
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+
                   <div className="flex items-center justify-between pt-6 border-t border-white/10">
                     <div className="flex items-center gap-2 text-muted-foreground text-sm">
                       <motion.div
@@ -480,7 +542,6 @@ export default function LaunchTokenForm() {
                   </div>
                 </CardContent>
               </Card>
-            </motion.div>
           </motion.div>
 
           {/* Preview Panel */}

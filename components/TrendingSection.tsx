@@ -4,7 +4,9 @@ import { TokenCard } from "./TokenCard";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { motion } from "framer-motion";
-import { TrendingUp, Clock, Zap, Filter } from "lucide-react";
+import { TrendingUp, Clock, Filter, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // Mock data
 const mockTokens = [
@@ -91,6 +93,48 @@ const mockTokens = [
 ];
 
 export function TrendingSection() {
+  const router = useRouter();
+  const [tokens, setTokens] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  // Fetch tokens from API
+  useEffect(() => {
+    const fetchTokens = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch from Prisma database instead of smart contract
+        const response = await fetch('/api/tokens');
+        const data = await response.json();
+        
+        console.log('TrendingSection API response:', data);
+        
+        if (data.success && Array.isArray(data.data)) {
+          console.log('Tokens loaded:', data.data);
+          setTokens(data.data);
+        } else {
+          setError(data.error || 'Failed to fetch tokens');
+        }
+      } catch (err) {
+        console.error('Error fetching tokens:', err);
+        setError('Network error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTokens();
+  }, []);
+
+  // Sort tokens for different tabs
+  const trendingTokens = tokens.slice(0, 8); // Show first 8 as trending
+  const newTokens = tokens.slice().reverse().slice(0, 8); // Show latest 8 as new
+
+  const handleLoadMore = () => {
+    router.push('/bonding-curve');
+  };
+
   return (
     <section className="py-16">
       <div className="container mx-auto px-4">
@@ -138,13 +182,6 @@ export function TrendingSection() {
                   <Clock className="w-4 h-4 mr-2" />
                   New
                 </TabsTrigger>
-                <TabsTrigger 
-                  value="hot"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                >
-                  <Zap className="w-4 h-4 mr-2" />
-                  Hot
-                </TabsTrigger>
               </TabsList>
 
               <Button variant="outline" className="glass-morphism border-primary/30 mt-4 sm:mt-0">
@@ -154,15 +191,39 @@ export function TrendingSection() {
             </div>
 
             <TabsContent value="trending">
-              <TokenGrid tokens={mockTokens} />
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+                  <span className="ml-3 text-lg">Loading trending tokens...</span>
+                </div>
+              ) : error ? (
+                <div className="text-center py-12">
+                  <p className="text-red-400 mb-4">Error: {error}</p>
+                  <Button onClick={() => window.location.reload()} variant="outline">
+                    Try Again
+                  </Button>
+                </div>
+              ) : (
+                <TokenGrid tokens={trendingTokens} />
+              )}
             </TabsContent>
             
             <TabsContent value="new">
-              <TokenGrid tokens={mockTokens.filter(token => token.isNew)} />
-            </TabsContent>
-            
-            <TabsContent value="hot">
-              <TokenGrid tokens={mockTokens.filter(token => token.isHot)} />
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-purple-400" />
+                  <span className="ml-3 text-lg">Loading new tokens...</span>
+                </div>
+              ) : error ? (
+                <div className="text-center py-12">
+                  <p className="text-red-400 mb-4">Error: {error}</p>
+                  <Button onClick={() => window.location.reload()} variant="outline">
+                    Try Again
+                  </Button>
+                </div>
+              ) : (
+                <TokenGrid tokens={newTokens} />
+              )}
             </TabsContent>
           </Tabs>
         </motion.div>
@@ -179,8 +240,9 @@ export function TrendingSection() {
             variant="outline" 
             size="lg"
             className="glass-morphism border-secondary/50 hover:border-secondary hover:neon-glow-cyan transition-all duration-300 px-8"
+            onClick={handleLoadMore}
           >
-            Load More Tokens
+            Explore All Tokens
           </Button>
         </motion.div>
       </div>
@@ -188,20 +250,71 @@ export function TrendingSection() {
   );
 }
 
-function TokenGrid({ tokens }: { tokens: typeof mockTokens }) {
+function TokenGrid({ tokens }: { tokens: any[] }) {
+  if (tokens.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-muted-foreground">No tokens found</p>
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-      {tokens.map((token, index) => (
-        <motion.div
-          key={token.id}
-          initial={{ y: 50, opacity: 0 }}
-          whileInView={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.6, delay: index * 0.1 }}
-          viewport={{ once: true }}
-        >
-          <TokenCard token={token} />
-        </motion.div>
-      ))}
+      {tokens.map((token, index) => {
+        // Ensure we have a valid address string for the key
+        const tokenAddress = token?.address || `token-${index}`;
+        
+        // Transform Prisma token data to match TokenCard expected format
+        const currentPrice = token?.pool_stats?.apt_reserves ? 
+          Number(token.pool_stats.apt_reserves) / 1e8 / 1000000000 : 0.000001;
+        
+        console.log(`Transforming token ${index}:`, {
+          name: token?.name,
+          symbol: token?.symbol,
+          iconUri: token?.icon_uri,
+          projectUri: token?.project_uri,
+          poolStats: token?.pool_stats
+        });
+        
+        const transformedToken = {
+          id: tokenAddress,
+          name: token?.name || "Unknown Token",
+          symbol: token?.symbol || "UNK",
+          price: currentPrice,
+          change24h: 0, // Would need historical data
+          volume: token?.pool_stats?.total_volume ? 
+            `$${(Number(token.pool_stats.total_volume) / 1e8).toFixed(2)}` : "$0",
+          marketCap: `$${(currentPrice * 1000000000).toFixed(2)}`, // Assuming 1B supply
+          creator: {
+            name: token?.creator ? `${token.creator.slice(0, 6)}...${token.creator.slice(-4)}` : "BullPump",
+            avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=bullpump"
+          },
+          progress: token?.pool_stats ? 
+            (Number(token.pool_stats.apt_reserves) / Number(token.pool_stats.graduation_threshold || 2150000000000)) * 100 : 0,
+          socialStats: {
+            views: token?.pool_stats?.trade_count || 0,
+            likes: 0,
+            comments: 0
+          },
+          isNew: index < 4, // Mark first 4 as new
+          iconUri: token?.icon_uri || "",
+          projectUri: token?.project_uri || ""
+        };
+        
+        console.log(`Transformed token ${index}:`, transformedToken);
+        
+        return (
+          <motion.div
+            key={`${tokenAddress}-${index}`} // Ensure unique key
+            initial={{ y: 50, opacity: 0 }}
+            whileInView={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.6, delay: index * 0.1 }}
+            viewport={{ once: true }}
+          >
+            <TokenCard token={transformedToken} />
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

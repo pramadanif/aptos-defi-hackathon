@@ -11,7 +11,7 @@ import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
-import { Loader2, RefreshCw, TrendingUp, TrendingDown } from "lucide-react";
+import { Loader2, RefreshCw, TrendingUp, TrendingDown, ExternalLink, Globe, Image as ImageIcon, Sparkles, Zap, Activity } from "lucide-react";
 import { toast } from "sonner";
 
 interface Asset {
@@ -24,6 +24,12 @@ interface Asset {
   valueUSD: number;
   coinType: string;
   category: string;
+  iconUri?: string;
+  projectUri?: string;
+  currentPrice?: number;
+  priceChange24h?: number;
+  marketCap?: number;
+  volume24h?: number;
 }
 
 interface CoinInfo {
@@ -226,31 +232,20 @@ export default function PortfolioPage() {
         "0x1::aptos_coin::AptosCoin", // APT
       ];
 
-      // Get BullPump tokens from registry
-      const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR;
-      
-      if (!MODULE_ADDR) {
-        console.warn("NEXT_PUBLIC_MODULE_ADDR not configured, skipping BullPump tokens");
-        return knownAssets;
-      }
-      
+      // Get BullPump tokens from Prisma database
       try {
-        const registry = await aptos.view({
-          payload: {
-            function: `${MODULE_ADDR}::token_factory::get_registry`,
-            typeArguments: [],
-            functionArguments: []
-          }
-        });
+        console.log("Fetching BullPump tokens from database...");
         
-        // Add BullPump tokens to known assets
-        if (Array.isArray(registry[0])) {
-          const bullPumpTokens = registry[0] as string[];
+        const tokensResponse = await fetch('/api/tokens');
+        const tokensData = await tokensResponse.json();
+        
+        if (tokensData.success && Array.isArray(tokensData.data)) {
+          const bullPumpTokens = tokensData.data.map((token: any) => token.address);
           knownAssets.push(...bullPumpTokens);
-          console.log("Found BullPump tokens:", bullPumpTokens);
+          console.log("Added BullPump tokens from database:", bullPumpTokens);
         }
-      } catch (registryError) {
-        console.warn("Could not fetch BullPump registry:", registryError);
+      } catch (dbError) {
+        console.warn("Could not fetch BullPump tokens from database:", dbError);
       }
 
       // Also check account resources for other coins
@@ -298,16 +293,88 @@ export default function PortfolioPage() {
           const amount = Number(balanceRaw) / Math.pow(10, coinInfo.decimals);
           const valueUSD = amount * priceData.price;
 
+          // Get additional metadata for BullPump tokens from database
+          let iconUri = "";
+          let projectUri = "";
+          let currentPrice = priceData.price;
+          
+          // Ensure assetType is a string
+          const assetTypeStr = typeof assetType === 'string' ? assetType : String(assetType);
+          
+          if (assetTypeStr.startsWith("0x") && assetTypeStr.length === 66 && !assetTypeStr.includes("::")) {
+            try {
+              console.log(`Fetching metadata for token: ${assetTypeStr}`);
+              
+              // Try to get metadata from database first
+              const tokenResponse = await fetch(`/api/tokens/${assetTypeStr}`);
+              console.log(`Database response status: ${tokenResponse.status}`);
+              
+              if (tokenResponse.ok) {
+                const tokenData = await tokenResponse.json();
+                console.log(`Database token data:`, tokenData);
+                
+                if (tokenData.success && tokenData.data) {
+                  // Update coin info with database data
+                  coinInfo.name = tokenData.data.name || coinInfo.name;
+                  coinInfo.symbol = tokenData.data.symbol || coinInfo.symbol;
+                  coinInfo.decimals = tokenData.data.decimals || coinInfo.decimals;
+                  
+                  iconUri = tokenData.data.icon_uri || "";
+                  projectUri = tokenData.data.project_uri || "";
+                  
+                  // Calculate price from pool stats
+                  if (tokenData.data.pool_stats?.apt_reserves) {
+                    const aptReserves = Number(tokenData.data.pool_stats.apt_reserves) / 1e8;
+                    const virtualTokenReserves = 1000000000; // 1B tokens
+                    currentPrice = (aptReserves / virtualTokenReserves) * priceData.price;
+                    console.log(`Calculated price from pool: ${currentPrice}`);
+                  }
+                  
+                  console.log(`✅ Metadata loaded from database for ${coinInfo.symbol}`);
+                }
+              } else {
+                console.log(`Database lookup failed, trying blockchain...`);
+                // Fallback to blockchain metadata if not in database
+                const [iconResponse, projectResponse] = await Promise.all([
+                  aptos.view({
+                    payload: {
+                      function: "0x1::fungible_asset::icon_uri",
+                      typeArguments: [],
+                      functionArguments: [assetTypeStr]
+                    }
+                  }).catch(() => [""]),
+                  aptos.view({
+                    payload: {
+                      function: "0x1::fungible_asset::project_uri",
+                      typeArguments: [],
+                      functionArguments: [assetTypeStr]
+                    }
+                  }).catch(() => [""]),
+                ]);
+                
+                iconUri = iconResponse[0] as string || "";
+                projectUri = projectResponse[0] as string || "";
+                console.log(`✅ Metadata loaded from blockchain for ${assetTypeStr}`);
+              }
+            } catch (metaError) {
+              console.warn(`Could not get metadata for ${assetTypeStr}:`, metaError);
+            }
+          }
+
           return {
             name: coinInfo.name,
             symbol: coinInfo.symbol,
-            logo: `/tokens/${coinInfo.symbol.toLowerCase()}.svg`,
+            logo: iconUri || `/tokens/${coinInfo.symbol.toLowerCase()}.svg`,
             fallback: coinInfo.symbol.charAt(0).toUpperCase(),
             amount,
             decimals: coinInfo.decimals,
-            valueUSD,
+            valueUSD: amount * currentPrice,
             coinType: assetType,
             category: getAssetCategory(assetType, coinInfo.symbol, coinInfo.name),
+            iconUri,
+            projectUri,
+            currentPrice,
+            priceChange24h: priceData.change24h,
           } as Asset;
         } catch (error) {
           console.error(`Error processing asset ${assetType}:`, error);
@@ -451,162 +518,210 @@ export default function PortfolioPage() {
               </Card>
             </motion.div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="space-y-8">
+              {/* Portfolio Overview */}
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }} 
+                animate={{ opacity: 1, y: 0 }} 
+                transition={{ duration: 0.6 }}
+                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+              >
+                <Card className="liquid-glass bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/20">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-purple-300 mb-1">Total Assets</p>
+                        <p className="text-2xl font-bold text-white">{assets.length}</p>
+                      </div>
+                      <div className="p-3 rounded-full bg-purple-500/20">
+                        <Sparkles className="w-6 h-6 text-purple-400" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="liquid-glass bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/20">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-green-300 mb-1">Portfolio Value</p>
+                        <p className="text-2xl font-bold text-white">${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      </div>
+                      <div className="p-3 rounded-full bg-green-500/20">
+                        <TrendingUp className="w-6 h-6 text-green-400" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                <Card className="liquid-glass bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-blue-300 mb-1">BullPump Tokens</p>
+                        <p className="text-2xl font-bold text-white">{otherAssets.length}</p>
+                      </div>
+                      <div className="p-3 rounded-full bg-blue-500/20">
+                        <Zap className="w-6 h-6 text-blue-400" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+              
+              {/* Assets Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Aptos Assets */}
               {aptosAssets.length > 0 && (
                 <motion.div initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.05 }}>
-                  <Card className="liquid-glass">
+                  <Card className="liquid-glass bg-gradient-to-br from-orange-500/5 to-yellow-500/5 border-orange-500/20">
                     <CardHeader>
-                      <CardTitle>Aptos Assets</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        <div className="p-2 rounded-lg bg-orange-500/20">
+                          <Activity className="w-5 h-5 text-orange-400" />
+                        </div>
+                        Aptos Assets
+                      </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <Table>
-                        <UITableHeader>
-                          <TableRow>
-                            <TableHead>Asset</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                            <TableHead className="text-right">Value (USD)</TableHead>
-                          </TableRow>
-                        </UITableHeader>
-                        <TableBody>
-                          {aptosAssets.map((asset) => (
-                            <TableRow key={asset.coinType}>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <Avatar className="size-8">
-                                    <AvatarImage src={asset.logo} alt={asset.symbol} />
-                                    <AvatarFallback>{asset.fallback}</AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="font-medium">{asset.symbol}</p>
-                                    <p className="text-xs text-muted-foreground">{asset.name}</p>
-                                  </div>
+                      <div className="space-y-4">
+                        {aptosAssets.map((asset) => (
+                          <motion.div 
+                            key={asset.coinType}
+                            whileHover={{ scale: 1.02 }}
+                            className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-orange-500/30 transition-all duration-300"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <Avatar className="size-12">
+                                  <AvatarImage src={asset.logo} alt={asset.symbol} />
+                                  <AvatarFallback className="bg-orange-500/20 text-orange-300">{asset.fallback}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-semibold text-lg">{asset.symbol}</p>
+                                  <p className="text-sm text-muted-foreground">{asset.name}</p>
+                                  {asset.currentPrice && (
+                                    <p className="text-xs text-green-400">
+                                      ${asset.currentPrice.toFixed(6)} per token
+                                    </p>
+                                  )}
                                 </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {asset.amount.toLocaleString(undefined, { 
-                                  minimumFractionDigits: 2, 
-                                  maximumFractionDigits: asset.amount < 1 ? 6 : 2 
-                                })}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                ${asset.valueUSD.toLocaleString(undefined, { 
-                                  minimumFractionDigits: 2, 
-                                  maximumFractionDigits: 2 
-                                })}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-semibold">
+                                  {asset.amount.toLocaleString(undefined, { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: asset.amount < 1 ? 6 : 2 
+                                  })}
+                                </p>
+                                <p className="text-sm text-green-400">
+                                  ${asset.valueUSD.toLocaleString(undefined, { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: 2 
+                                  })}
+                                </p>
+                                {asset.priceChange24h !== undefined && asset.priceChange24h !== 0 && (
+                                  <div className={`flex items-center justify-end gap-1 text-xs ${
+                                    asset.priceChange24h >= 0 ? 'text-green-400' : 'text-red-400'
+                                  }`}>
+                                    {asset.priceChange24h >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                                    {asset.priceChange24h >= 0 ? '+' : ''}{asset.priceChange24h.toFixed(2)}%
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
                     </CardContent>
                   </Card>
                 </motion.div>
               )}
 
-              {/* Meme Coins */}
-              {memeCoins.length > 0 && (
-                <motion.div initial={{ opacity: 0, x: 0 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
-                  <Card className="liquid-glass">
-                    <CardHeader>
-                      <CardTitle>Meme Coins</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <Table>
-                        <UITableHeader>
-                          <TableRow>
-                            <TableHead>Token</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                            <TableHead className="text-right">Value (USD)</TableHead>
-                          </TableRow>
-                        </UITableHeader>
-                        <TableBody>
-                          {memeCoins.map((asset) => (
-                            <TableRow key={asset.coinType}>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <Avatar className="size-8">
-                                    <AvatarImage src={asset.logo} alt={asset.symbol} />
-                                    <AvatarFallback>{asset.fallback}</AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="font-medium">{asset.symbol}</p>
-                                    <p className="text-xs text-muted-foreground">{asset.name}</p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {asset.amount.toLocaleString(undefined, { 
-                                  minimumFractionDigits: 0, 
-                                  maximumFractionDigits: 0 
-                                })}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                ${asset.valueUSD.toLocaleString(undefined, { 
-                                  minimumFractionDigits: 2, 
-                                  maximumFractionDigits: 2 
-                                })}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )}
 
-              {/* Other Assets */}
+              {/* BullPump Tokens */}
               {otherAssets.length > 0 && (
                 <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
-                  <Card className="liquid-glass">
+                  <Card className="liquid-glass bg-gradient-to-br from-purple-500/5 to-pink-500/5 border-purple-500/20">
                     <CardHeader>
-                      <CardTitle>Other Assets</CardTitle>
+                      <CardTitle className="flex items-center gap-2">
+                        <div className="p-2 rounded-lg bg-purple-500/20">
+                          <Zap className="w-5 h-5 text-purple-400" />
+                        </div>
+                        BullPump Tokens
+                      </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <Table>
-                        <UITableHeader>
-                          <TableRow>
-                            <TableHead>Token</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                            <TableHead className="text-right">Value (USD)</TableHead>
-                          </TableRow>
-                        </UITableHeader>
-                        <TableBody>
-                          {otherAssets.map((asset) => (
-                            <TableRow key={asset.coinType}>
-                              <TableCell>
-                                <div className="flex items-center gap-3">
-                                  <Avatar className="size-8">
-                                    <AvatarImage src={asset.logo} alt={asset.symbol} />
-                                    <AvatarFallback>{asset.fallback}</AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="font-medium">{asset.symbol}</p>
-                                    <p className="text-xs text-muted-foreground">{asset.name}</p>
-                                  </div>
+                      <div className="space-y-4">
+                        {otherAssets.map((asset) => (
+                          <motion.div 
+                            key={asset.coinType}
+                            whileHover={{ scale: 1.02 }}
+                            className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-purple-500/30 transition-all duration-300"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-4">
+                                <Avatar className="size-12">
+                                  <AvatarImage src={asset.iconUri || asset.logo} alt={asset.symbol} />
+                                  <AvatarFallback className="bg-purple-500/20 text-purple-300">{asset.fallback}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <p className="font-semibold text-lg">{asset.symbol}</p>
+                                  <p className="text-sm text-muted-foreground">{asset.name}</p>
+                                  {asset.currentPrice && (
+                                    <p className="text-xs text-green-400">
+                                      ${asset.currentPrice.toFixed(8)} per token
+                                    </p>
+                                  )}
                                 </div>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {asset.amount.toLocaleString(undefined, { 
-                                  minimumFractionDigits: 2, 
-                                  maximumFractionDigits: asset.amount < 1 ? 6 : 2 
-                                })}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                ${asset.valueUSD.toLocaleString(undefined, { 
-                                  minimumFractionDigits: 2, 
-                                  maximumFractionDigits: 2 
-                                })}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-lg font-semibold">
+                                  {asset.amount.toLocaleString(undefined, { 
+                                    minimumFractionDigits: 0, 
+                                    maximumFractionDigits: 0 
+                                  })}
+                                </p>
+                                <p className="text-sm text-green-400">
+                                  ${asset.valueUSD.toLocaleString(undefined, { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: 2 
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                            
+                            {/* Token Metadata */}
+                            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                              {asset.iconUri && (
+                                <Badge variant="outline" className="text-xs bg-blue-500/10 border-blue-500/30 text-blue-300">
+                                  <ImageIcon className="w-3 h-3 mr-1" />
+                                  Icon
+                                </Badge>
+                              )}
+                              {asset.projectUri && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs bg-green-500/10 border-green-500/30 text-green-300 cursor-pointer hover:bg-green-500/20 transition-colors"
+                                  onClick={() => window.open(asset.projectUri, '_blank')}
+                                >
+                                  <Globe className="w-3 h-3 mr-1" />
+                                  Website
+                                  <ExternalLink className="w-3 h-3 ml-1" />
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs bg-purple-500/10 border-purple-500/30 text-purple-300">
+                                {asset.decimals} decimals
+                              </Badge>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
                     </CardContent>
                   </Card>
                 </motion.div>
               )}
+              </div>
             </div>
           )}
         </div>
