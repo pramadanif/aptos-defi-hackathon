@@ -2,12 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import { Label } from "./ui/label";
 import { Badge } from "./ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { Progress } from "./ui/progress";
 import { 
   TrendingUp, 
@@ -28,6 +24,7 @@ import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import Image from "next/image";
+import Link from "next/link";
 
 interface TokenInfo {
   name: string;
@@ -160,13 +157,8 @@ const dummyTokens: TokenInfo[] = [
 ];
 
 export function BondingCurveTrading() {
-  const { account, signAndSubmitTransaction } = useWallet() as any;
-  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
-  const [aptAmount, setAptAmount] = useState("");
-  const [tokenAmount, setTokenAmount] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const { account } = useWallet() as any;
   const [tokens, setTokens] = useState<TokenInfo[]>(dummyTokens);
-  const [activeTab, setActiveTab] = useState("buy");
   const [loadingTokens, setLoadingTokens] = useState(false);
 
   const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR;
@@ -175,7 +167,6 @@ export function BondingCurveTrading() {
     throw new Error("NEXT_PUBLIC_MODULE_ADDR environment variable is required");
   }
   const GRADUATION_THRESHOLD = 21500;
-  const VIRTUAL_APT_RESERVES = 28.24;
 
   const config = useMemo(() => {
     const nodeUrl = process.env.NEXT_PUBLIC_APTOS_NODE_URL || 'https://fullnode.testnet.aptoslabs.com/v1';
@@ -277,7 +268,6 @@ export function BondingCurveTrading() {
       
       if (resolvedTokens.length > 0) {
         setTokens(resolvedTokens);
-        setSelectedToken(resolvedTokens[0]);
         toast.success(`Found ${resolvedTokens.length} bonding curve pools`);
       } else {
         toast.info("No real tokens found. Showing demo tokens.");
@@ -299,127 +289,6 @@ export function BondingCurveTrading() {
   useEffect(() => {
     fetchBondingCurvePools();
   }, []);
-
-  // Bonding curve calculation (XYK formula)
-  const calculateTokensOut = (aptIn: number, aptReserves: number, tokenSupply: number): number => {
-    const x = aptReserves + VIRTUAL_APT_RESERVES;
-    const y = tokenSupply;
-    return (y * aptIn) / (x + aptIn);
-  };
-
-  const calculateAptOut = (tokensIn: number, aptReserves: number, tokenSupply: number): number => {
-    const x = aptReserves + VIRTUAL_APT_RESERVES;
-    const y = tokenSupply;
-    return (x * tokensIn) / (y + tokensIn);
-  };
-
-  const graduationProgress = selectedToken 
-    ? Math.min((selectedToken.apt_reserves / GRADUATION_THRESHOLD) * 100, 100)
-    : 0;
-
-  const estimatedTokens = useMemo(() => {
-    if (!selectedToken || !aptAmount || isNaN(Number(aptAmount))) return 0;
-    return calculateTokensOut(
-      Number(aptAmount), 
-      selectedToken.apt_reserves, 
-      selectedToken.token_supply
-    );
-  }, [aptAmount, selectedToken]);
-
-  const estimatedApt = useMemo(() => {
-    if (!selectedToken || !tokenAmount || isNaN(Number(tokenAmount))) return 0;
-    return calculateAptOut(
-      Number(tokenAmount),
-      selectedToken.apt_reserves,
-      selectedToken.token_supply
-    );
-  }, [tokenAmount, selectedToken]);
-
-  const handleBuyTokens = async () => {
-    if (!account || !selectedToken || !aptAmount) {
-      toast.error("Please connect wallet and enter APT amount");
-      return;
-    }
-
-    if (selectedToken.is_graduated) {
-      toast.error("Token has graduated to DEX");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const aptInOctas = Math.floor(Number(aptAmount) * 100000000);
-      
-      console.log(`Buying tokens: ${aptAmount} APT (${aptInOctas} octas) for ${selectedToken.symbol}`);
-
-      const transaction = await signAndSubmitTransaction({
-        sender: account.address,
-        data: {
-          function: `${MODULE_ADDR}::bonding_curve_pool::buy_tokens`,
-          typeArguments: [],
-          functionArguments: [
-            selectedToken.fa_object_addr,
-            aptInOctas.toString()
-          ],
-        },
-      });
-
-      const txHash = transaction.hash;
-      console.log("Buy transaction submitted:", txHash);
-
-      toast.success("🎉 Purchase successful!", {
-        description: `Bought ~${estimatedTokens.toFixed(2)} ${selectedToken.symbol}`,
-        duration: 5000
-      });
-
-      setAptAmount("");
-      setTokenAmount("");
-      
-      setTimeout(() => {
-        fetchBondingCurvePools();
-      }, 2000);
-
-    } catch (error: any) {
-      console.error("Buy error:", error);
-      toast.error("Purchase failed", {
-        description: error?.message || "Transaction failed"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSellTokens = async () => {
-    if (!account || !selectedToken || !tokenAmount) {
-      toast.error("Please connect wallet and enter token amount");
-      return;
-    }
-
-    if (selectedToken.is_graduated) {
-      toast.error("Token has graduated to DEX");
-      return;
-    }
-
-    if (!selectedToken.user_balance || selectedToken.user_balance < Number(tokenAmount)) {
-      toast.error("Insufficient token balance");
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      toast.info("Sell functionality not available", {
-        description: "The current bonding curve only supports buying. Selling would need to be added to the smart contract."
-      });
-      
-    } catch (error: any) {
-      console.error("Sell error:", error);
-      toast.error("Sale failed", {
-        description: error?.message || "Transaction failed"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   return (
     <section className="py-16 min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative">
@@ -486,8 +355,6 @@ export function BondingCurveTrading() {
                 key={token.fa_object_addr} 
                 token={token} 
                 index={index}
-                onSelect={() => setSelectedToken(token)}
-                isSelected={selectedToken?.fa_object_addr === token.fa_object_addr}
                 graduationThreshold={GRADUATION_THRESHOLD}
               />
             ))}
@@ -495,200 +362,7 @@ export function BondingCurveTrading() {
         )}
 
         {/* Trading Modal/Panel */}
-        {selectedToken && (
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            onClick={() => setSelectedToken(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-card border border-border rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
-                      <span className="text-lg font-bold">{selectedToken.symbol.charAt(0)}</span>
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold">{selectedToken.name}</h3>
-                      <p className="text-muted-foreground">{selectedToken.symbol}</p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSelectedToken(null)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    ✕
-                  </Button>
-                </div>
 
-                {/* Token Stats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold text-primary">{selectedToken.apt_reserves.toFixed(2)}</p>
-                    <p className="text-sm text-muted-foreground">APT Reserves</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold text-secondary">{selectedToken.token_supply.toLocaleString()}</p>
-                    <p className="text-sm text-muted-foreground">Pool Supply</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold text-accent">{graduationProgress.toFixed(1)}%</p>
-                    <p className="text-sm text-muted-foreground">To Graduation</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold text-green-500">
-                      {selectedToken.user_balance ? selectedToken.user_balance.toFixed(2) : "0.00"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">Your Balance</p>
-                  </div>
-                </div>
-
-                {/* Graduation Progress */}
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>Progress to DEX Graduation</span>
-                    <span>{GRADUATION_THRESHOLD.toLocaleString()} APT Target</span>
-                  </div>
-                  <Progress value={graduationProgress} className="h-3" />
-                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-2">
-                    <Info className="w-3 h-3" />
-                    When graduation threshold is reached, remaining tokens are burned and a DEX pool is created
-                  </p>
-                </div>
-
-                {/* Trading Interface */}
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                  <TabsList className="grid w-full grid-cols-2 bg-muted/20">
-                    <TabsTrigger value="buy" className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4" />
-                      Buy
-                    </TabsTrigger>
-                    <TabsTrigger value="sell" className="flex items-center gap-2">
-                      <TrendingDown className="w-4 h-4" />
-                      Sell
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="buy" className="space-y-4 mt-6">
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="apt-amount">APT Amount</Label>
-                        <Input
-                          id="apt-amount"
-                          type="number"
-                          placeholder="0.0"
-                          value={aptAmount}
-                          onChange={(e) => setAptAmount(e.target.value)}
-                          className="bg-muted/20"
-                          disabled={selectedToken.is_graduated}
-                        />
-                      </div>
-                      
-                      <div className="flex items-center justify-center">
-                        <ArrowUpDown className="w-5 h-5 text-muted-foreground" />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="token-estimate">You'll receive (estimated)</Label>
-                        <Input
-                          id="token-estimate"
-                          value={estimatedTokens.toFixed(6)}
-                          readOnly
-                          className="bg-muted/10"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {selectedToken.symbol} tokens
-                        </p>
-                      </div>
-
-                      <Button
-                        onClick={handleBuyTokens}
-                        disabled={isLoading || !aptAmount || selectedToken.is_graduated || !account}
-                        className="w-full bg-gradient-primary border-0 neon-glow-pink"
-                      >
-                        {isLoading ? (
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Wallet className="w-4 h-4 mr-2" />
-                        )}
-                        {isLoading ? "Processing..." : `Buy ${selectedToken.symbol}`}
-                      </Button>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="sell" className="space-y-4 mt-6">
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="token-amount">Token Amount</Label>
-                        <Input
-                          id="token-amount"
-                          type="number"
-                          placeholder="0.0"
-                          value={tokenAmount}
-                          onChange={(e) => setTokenAmount(e.target.value)}
-                          className="bg-muted/20"
-                          disabled={selectedToken.is_graduated}
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {selectedToken.symbol} tokens to sell
-                        </p>
-                      </div>
-
-                      <div className="flex items-center justify-center">
-                        <ArrowUpDown className="w-5 h-5 text-muted-foreground" />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="apt-estimate">You'll receive (estimated)</Label>
-                        <Input
-                          id="apt-estimate"
-                          value={estimatedApt.toFixed(6)}
-                          readOnly
-                          className="bg-muted/10"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">APT</p>
-                      </div>
-
-                      <Button
-                        onClick={handleSellTokens}
-                        disabled={isLoading || !tokenAmount || selectedToken.is_graduated || !account}
-                        className="w-full bg-gradient-secondary border-0 neon-glow-cyan"
-                      >
-                        {isLoading ? (
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Zap className="w-4 h-4 mr-2" />
-                        )}
-                        {isLoading ? "Processing..." : `Sell ${selectedToken.symbol}`}
-                      </Button>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-
-                {selectedToken.is_graduated && (
-                  <div className="p-4 rounded-lg bg-secondary/20 border border-secondary/30 mt-6">
-                    <div className="flex items-center gap-2 text-secondary mb-2">
-                      <Target className="w-5 h-5" />
-                      <span className="font-semibold">Token Graduated!</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      This token has reached the graduation threshold and is now available on DEX. 
-                      Trading on the bonding curve is no longer available.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
       </div>
 
       {/* Decorative elements */}
@@ -712,12 +386,10 @@ export function BondingCurveTrading() {
 interface TokenCardProps {
   token: TokenInfo;
   index: number;
-  onSelect: () => void;
-  isSelected: boolean;
   graduationThreshold: number;
 }
 
-function TokenCard({ token, index, onSelect, isSelected, graduationThreshold }: TokenCardProps) {
+function TokenCard({ token, index, graduationThreshold }: TokenCardProps) {
   const graduationProgress = Math.min((token.apt_reserves / graduationThreshold) * 100, 100);
   const isGraduated = token.is_graduated;
   const priceChange = Math.random() > 0.5 ? Math.random() * 50 : -Math.random() * 30; // Mock price change
@@ -725,6 +397,7 @@ function TokenCard({ token, index, onSelect, isSelected, graduationThreshold }: 
   const marketCap = `$${(token.apt_reserves * 10).toFixed(1)}K`; // Mock market cap
 
   return (
+    <Link href={`/coin/${token.fa_object_addr}`}>
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -737,19 +410,13 @@ function TokenCard({ token, index, onSelect, isSelected, graduationThreshold }: 
       }}
       whileTap={{ scale: 0.98 }}
       className={`relative overflow-hidden rounded-xl border cursor-pointer transition-all duration-300 group liquid-glass ${
-        isSelected
-          ? "border-cyan-400/50 bg-gradient-to-br from-cyan-500/20 to-pink-500/20 neon-glow-pink shadow-xl"
-          : "border-slate-600/50 hover:border-cyan-400/50 bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-md hover:from-cyan-500/10 hover:to-pink-500/10"
+          "border-slate-600/50 hover:border-cyan-400/50 bg-gradient-to-br from-slate-800/80 to-slate-700/80 backdrop-blur-md hover:from-cyan-500/10 hover:to-pink-500/10"
       }`}
-      onClick={onSelect}
       style={{
-        background: isSelected 
-          ? "linear-gradient(135deg, rgba(34,211,238,0.15) 0%, rgba(236,72,153,0.15) 100%)"
-          : "linear-gradient(135deg, rgba(30,41,59,0.8) 0%, rgba(51,65,85,0.8) 100%)",
-        backdropFilter: "blur(12px)",
-        border: isSelected 
-          ? "1px solid rgba(34,211,238,0.5)"
-          : "1px solid rgba(100,116,139,0.3)"
+        background:
+          "linear-gradient(135deg, rgba(30,41,59,0.8) 0%, rgba(51,65,85,0.8) 100%)",
+        border:
+          "1px solid rgba(100,116,139,0.3)"
       }}
     >
       {/* NSFW Wiggle Animation */}
@@ -847,5 +514,6 @@ function TokenCard({ token, index, onSelect, isSelected, graduationThreshold }: 
         </div>
       </motion.div>
     </motion.div>
+    </Link>
   );
 }
