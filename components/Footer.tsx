@@ -20,15 +20,15 @@ export function Footer() {
             <div className="flex items-center space-x-2 mb-4">
               <div className="w-8 h-8 rounded-lg overflow-hidden">
                 <Image 
-                  src="/BULLPUMP_FIX.png" 
-                  alt="BullPump Logo" 
+                  src="/ARGOPUMP.png" 
+                  alt="ArgoPump Logo" 
                   width={32} 
                   height={32}
                   className="w-full h-full object-contain"
                 />
               </div>
               <h3 className="text-xl font-bold text-gradient-primary">
-                BullPump
+                ArgoPump
               </h3>
             </div>
             <p className="text-muted-foreground mb-6 max-w-md">

@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { toast } from "sonner";
+import { randomUUID } from "crypto";
 
 export function Header() {
   const pathname = usePathname();
@@ -144,8 +145,8 @@ export function Header() {
             >
               <div className="absolute inset-0 bg-gradient-to-br from-purple-400 via-pink-400 to-cyan-400 opacity-50 blur-sm"></div>
               <Image 
-                src="/BULLPUMP_FIX.png" 
-                alt="BullPump Logo" 
+                src="/ARGOPUMP.png" 
+                alt="ArgoPump Logo" 
                 width={40} 
                 height={40}
                 className="w-full h-full object-contain relative z-10"
@@ -189,7 +190,7 @@ export function Header() {
                     ease: "easeInOut"
                   }}
                 >
-                  BullPump
+                  ArgoPump
                 </motion.span>
                 
                 {/* Floating sparkles */}
@@ -394,7 +395,7 @@ export function Header() {
                       <p className="text-sm text-white/60">No wallets detected. Please install Petra, Martian, or OKX Wallet extension.</p>
                     )}
                     {installedWallets.map((w) => (
-                      <Button key={w.name} variant="outline" className="justify-start bg-white/5 border-white/20 text-white hover:bg-white/10" onClick={() => handleConnect(w.name)}>
+                      <Button key={randomUUID()} variant="outline" className="justify-start bg-white/5 border-white/20 text-white hover:bg-white/10" onClick={() => handleConnect(w.name)}>
                         {w.icon ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={w.icon} alt="" className="w-5 h-5 mr-2" />
