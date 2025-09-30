@@ -100,6 +100,12 @@ interface TokenInfo {
   project_uri?: string;
 }
 
+interface CoinInfo {
+  name: string;
+  symbol: string;
+  decimals: number;
+}
+
 // Spectacular Text Animation Component
 function SpectacularText({ text, className = "" }: { text: string; className?: string }) {
   return (
@@ -345,19 +351,143 @@ export default function CoinDetailPage() {
 
   const aptos = useMemo(() => new Aptos(config), [config]);
 
-  // Function to get user's token balance
+  // Function to get balance using direct API endpoint (EXACT COPY from portfolio)
+  const getBalanceFromAPI = async (address: string, assetType: string): Promise<string> => {
+    try {
+      // Clean address - remove 0x prefix if present for URL
+      const cleanAddress = address.startsWith('0x') ? address.slice(2) : address;
+      
+      const response = await fetch(
+        `https://api.testnet.aptoslabs.com/v1/accounts/${cleanAddress}/balance/${encodeURIComponent(assetType)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json, application/x-bcs'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return "0"; // Asset not found means 0 balance
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // The API returns a simple number as text (e.g., "96394200")
+      const balanceText = await response.text();
+      const balance = balanceText.trim().replace(/"/g, ''); // Remove quotes if present
+      
+      console.log(`Balance for ${assetType}: ${balance}`);
+      return balance || "0";
+    } catch (error) {
+      console.warn(`Failed to get balance for ${assetType}:`, error);
+      return "0";
+    }
+  };
+
+  // Function to get coin info from coin type or fungible asset (EXACT COPY from portfolio)
+  const getCoinInfo = async (assetType: string): Promise<CoinInfo> => {
+    try {
+      // For APT coin
+      if (assetType === "0x1::aptos_coin::AptosCoin") {
+        return {
+          name: "Aptos",
+          symbol: "APT",
+          decimals: 8
+        };
+      }
+
+      // Check if it's a fungible asset (FA) object address
+      if (assetType.startsWith("0x") && assetType.length === 66 && !assetType.includes("::")) {
+        try {
+          // Try to get FA metadata using view function
+          const metadataResponse = await aptos.view({
+            payload: {
+              function: "0x1::fungible_asset::name",
+              typeArguments: [],
+              functionArguments: [assetType]
+            }
+          });
+          
+          const symbolResponse = await aptos.view({
+            payload: {
+              function: "0x1::fungible_asset::symbol", 
+              typeArguments: [],
+              functionArguments: [assetType]
+            }
+          });
+
+          const decimalsResponse = await aptos.view({
+            payload: {
+              function: "0x1::fungible_asset::decimals",
+              typeArguments: [],
+              functionArguments: [assetType]
+            }
+          });
+          
+          return {
+            name: metadataResponse[0] as string,
+            symbol: symbolResponse[0] as string,
+            decimals: decimalsResponse[0] as number
+          };
+        } catch (faError) {
+          console.log(`Could not get FA metadata for ${assetType}:`, faError);
+        }
+      }
+
+      // Try to get coin info from blockchain (for legacy coins)
+      const moduleAddress = assetType.split("::")[0];
+      const resource = await aptos.getAccountResource({
+        accountAddress: moduleAddress,
+        resourceType: `0x1::coin::CoinInfo<${assetType}>`
+      });
+
+      const coinData = resource.data as any;
+      return {
+        name: coinData.name,
+        symbol: coinData.symbol,
+        decimals: coinData.decimals
+      };
+    } catch (error) {
+      console.log(`Could not get asset info for ${assetType}:`, error);
+      // Fallback for unknown assets
+      const parts = assetType.split("::");
+      const symbol = parts[parts.length - 1] || assetType.substring(0, 8);
+      return {
+        name: symbol,
+        symbol: symbol.toUpperCase(),
+        decimals: 8
+      };
+    }
+  };
+
+  // Function to get user's token balance using getCoinInfo for correct decimals
   const getUserTokenBalance = async (faObjectAddr: string): Promise<number> => {
     if (!account?.address) return 0;
 
     try {
-      const balance = await aptos.view({
-        payload: {
-          function: `${MODULE_ADDR}::bonding_curve_pool::get_token_balance`,
-          typeArguments: [],
-          functionArguments: [account.address, faObjectAddr]
-        }
+      // Get balance from API
+      const balanceRaw = await getBalanceFromAPI(account.address, faObjectAddr);
+      
+      if (balanceRaw === "0") {
+        console.log(`💰 No balance for ${faObjectAddr}`);
+        return 0;
+      }
+
+      // Get coin info to determine correct decimals
+      const coinInfo = await getCoinInfo(faObjectAddr);
+      const divisor = Math.pow(10, coinInfo.decimals);
+      const balanceNum = Number(balanceRaw) / divisor;
+      
+      console.log(`💰 User balance for ${faObjectAddr}:`, {
+        raw: balanceRaw,
+        decimals: coinInfo.decimals,
+        formatted: balanceNum.toFixed(4),
+        symbol: coinInfo.symbol
       });
-      return Number(balance[0]) / 100000000;
+      
+      return balanceNum;
     } catch (error) {
       console.warn(`Could not get user balance for ${faObjectAddr}:`, error);
       return 0;
@@ -421,8 +551,15 @@ export default function CoinDetailPage() {
         .filter((token): token is TokenInfo => token !== null)
         .sort((a, b) => b.apt_reserves - a.apt_reserves);
 
-      if (resolvedTokens.length > 0) {
+      // Set selected token to current page token (by address)
+      const currentToken = resolvedTokens.find(t => t.fa_object_addr === address);
+      if (currentToken) {
+        setSelectedToken(currentToken);
+        console.log(`✅ Selected token matched to page: ${currentToken.symbol}`);
+      } else if (resolvedTokens.length > 0) {
+        // Fallback to first token if current not found
         setSelectedToken(resolvedTokens[0]);
+        console.log(`⚠️  Current token not found, using first: ${resolvedTokens[0].symbol}`);
       }
 
     } catch (error: any) {
@@ -437,14 +574,19 @@ export default function CoinDetailPage() {
   };
 
   useEffect(() => {
-    fetchBondingCurvePools();
-  }, []);
-
-  useEffect(() => {
     if (address) {
       fetchTokenDetail();
+      fetchBondingCurvePools(); // Fetch pools to sync selectedToken
     }
   }, [address]);
+
+  // Refresh balance when wallet connects/disconnects
+  useEffect(() => {
+    if (address && account?.address) {
+      console.log('💼 Wallet connected, refreshing balances...');
+      fetchBondingCurvePools(); // Refresh to get updated user balances
+    }
+  }, [account?.address]);
 
   // Bonding curve calculation (XYK formula)
   const calculateTokensOut = (aptIn: number, aptReserves: number, tokenSupply: number): number => {
@@ -484,6 +626,12 @@ export default function CoinDetailPage() {
       const data = await response.json();
 
       if (data.success) {
+        console.log(`📊 Token Details for ${data.data.symbol}:`, {
+          name: data.data.name,
+          trades: data.data.trades?.length || 0,
+          volume_24h: data.data.volume_24h,
+          trade_count_24h: data.data.trade_count_24h
+        });
         setToken(data.data);
       } else {
         setError(data.error || "Failed to fetch token details");
@@ -646,7 +794,12 @@ export default function CoinDetailPage() {
     try {
       const aptInOctas = Math.floor(Number(aptAmount) * 100000000);
 
-      console.log(`Buying tokens: ${aptAmount} APT (${aptInOctas} octas) for ${selectedToken.symbol}`);
+      console.log(`💰 Buying ${selectedToken.symbol}:`, {
+        aptAmount: `${aptAmount} APT`,
+        octas: aptInOctas,
+        token: selectedToken.name,
+        address: selectedToken.fa_object_addr
+      });
 
       const transaction = await signAndSubmitTransaction({
         sender: account.address,
@@ -1177,11 +1330,11 @@ export default function CoinDetailPage() {
                             {/* Token Stats */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                               <div className="text-center p-3 rounded-lg bg-muted/20">
-                                <p className="text-2xl font-bold text-primary">{selectedToken?.apt_reserves.toFixed(2)}</p>
+                                <p className="text-2xl font-bold text-primary">{formatNumber(selectedToken?.apt_reserves || 0)}</p>
                                 <p className="text-sm text-muted-foreground">APT Reserves</p>
                               </div>
                               <div className="text-center p-3 rounded-lg bg-muted/20">
-                                <p className="text-2xl font-bold text-secondary">{selectedToken?.token_supply.toLocaleString()}</p>
+                                <p className="text-2xl font-bold text-secondary">{formatNumber(selectedToken?.token_supply || 0)}</p>
                                 <p className="text-sm text-muted-foreground">Pool Supply</p>
                               </div>
                               <div className="text-center p-3 rounded-lg bg-muted/20">
@@ -1190,7 +1343,7 @@ export default function CoinDetailPage() {
                               </div>
                               <div className="text-center p-3 rounded-lg bg-muted/20">
                                 <p className="text-2xl font-bold text-green-500">
-                                  {selectedToken?.user_balance ? selectedToken?.user_balance.toFixed(2) : "0.00"}
+                                  {formatNumber(selectedToken?.user_balance || 0)}
                                 </p>
                                 <p className="text-sm text-muted-foreground">Your Balance</p>
                               </div>

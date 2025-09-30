@@ -65,7 +65,7 @@ export class IndexerService {
 
   // BullPump contract address from environment
   private readonly BULLPUMP_CONTRACT = process.env.BULLPUMP_CONTRACT_ADDRESS || process.env.NEXT_PUBLIC_MODULE_ADDR || "";
-  private readonly POLLING_INTERVAL = 3000; // 3 seconds - Avoid rate limit
+  private readonly POLLING_INTERVAL = 2000; // 2 seconds - ULTRA FAST real-time tracking
   
   // BullPump module names
   private readonly TOKEN_FACTORY_MODULE = `${this.BULLPUMP_CONTRACT}::token_factory`;
@@ -80,14 +80,15 @@ export class IndexerService {
     const nodeUrl = process.env.APTOS_NODE_URL || 'https://fullnode.testnet.aptoslabs.com/v1';
     const apiKey = process.env.APTOS_API_KEY;
     
-    console.log('🌐 REAL-TIME Indexer Configuration:');
+    console.log('⚡ ULTRA-FAST Indexer Configuration:');
     console.log('   Network:', network);
     console.log('   Node URL:', nodeUrl);
     console.log('   API Key:', apiKey ? '✅ Configured (Rate limit protection)' : '❌ Not configured (May hit rate limits)');
     console.log('   Contract:', this.BULLPUMP_CONTRACT);
-    console.log('   Polling Interval:', this.POLLING_INTERVAL + 'ms (REAL-TIME)');
-    console.log('   Batch Size: 200 transactions');
-    console.log('   Expected Delay: ~1-2 seconds after deploy');
+    console.log('   Polling Interval:', this.POLLING_INTERVAL + 'ms (⚡ ULTRA-FAST)');
+    console.log('   Batch Size: 300 transactions per check');
+    console.log('   Expected Delay: ~2-5 seconds after transaction');
+    console.log('   Strategy: Skip old history, track latest only');
     
     const config = new AptosConfig({ 
       network,
@@ -227,31 +228,43 @@ export class IndexerService {
 
   private async initializeLastProcessedVersion() {
     try {
-      // Try to get the latest transaction version from our database
-      const latestTrade = await prisma.trade.findFirst({
+      // ULTRA-FAST MODE: Always start from CURRENT ledger, skip old history
+      const ledgerInfo = await this.aptos.getLedgerInfo();
+      const currentVersion = parseInt(ledgerInfo.ledger_version);
+      
+      // Check if we have recent trades (within last hour)
+      const recentTrade = await prisma.trade.findFirst({
+        where: {
+          created_at: {
+            gte: new Date(Date.now() - 3600000) // Last 1 hour
+          }
+        },
         orderBy: { created_at: 'desc' }
       });
 
-      if (latestTrade) {
-        // Get the transaction version for this trade
-        const txn = await this.aptos.getTransactionByHash({
-          transactionHash: latestTrade.transaction_hash
-        });
-        
-        if ('version' in txn) {
-          this.lastProcessedVersion = parseInt(txn.version);
+      if (recentTrade) {
+        // Continue from last recent trade
+        try {
+          const txn = await this.aptos.getTransactionByHash({
+            transactionHash: recentTrade.transaction_hash
+          });
+          
+          if ('version' in txn) {
+            this.lastProcessedVersion = parseInt(txn.version);
+            console.log(`📍 Continuing from recent trade: ${this.lastProcessedVersion}`);
+            return;
+          }
+        } catch (error) {
+          console.log('⚠️  Could not get recent trade version, jumping to latest');
         }
-      } else {
-        // If no trades in database, start from recent transactions
-        // to catch up with current state
-        const ledgerInfo = await this.aptos.getLedgerInfo();
-        const currentVersion = parseInt(ledgerInfo.ledger_version);
-        // Start very close to current for REAL-TIME tracking
-        this.lastProcessedVersion = Math.max(0, currentVersion - 50);
-        console.log(`📍 No previous trades found, starting from recent history: ${this.lastProcessedVersion}`);
       }
-
-      console.log(`📍 Starting from version: ${this.lastProcessedVersion}`);
+      
+      // No recent trades OR error getting trade: Jump to latest - 100 txs for safety
+      this.lastProcessedVersion = Math.max(0, currentVersion - 100);
+      console.log(`⚡ ULTRA-FAST MODE: Jumping to latest blockchain version`);
+      console.log(`📍 Current ledger: ${currentVersion}`);
+      console.log(`📍 Starting from: ${this.lastProcessedVersion} (latest - 100 for safety)`);
+      console.log(`⚠️  Note: Old transactions (v6878M-${this.lastProcessedVersion}) are SKIPPED for speed`);
     } catch (error) {
       console.error('⚠️  Could not initialize last processed version:', error);
       this.lastProcessedVersion = 0;
@@ -260,15 +273,18 @@ export class IndexerService {
 
   private async indexNewTransactions() {
     try {
-      console.log('🔍 Checking for new transactions...');
-
-      // Get recent transactions - REAL-TIME processing
+      // Get recent transactions - ULTRA-FAST processing
       const transactions = await this.aptos.getTransactions({
         options: {
           offset: this.lastProcessedVersion + 1,
-          limit: 200 // Optimized for real-time responsiveness
+          limit: 300 // Larger batch for speed
         }
       });
+
+      if (transactions.length === 0) {
+        // No new transactions, wait for next poll
+        return;
+      }
 
       let processedCount = 0;
       let bullPumpTxCount = 0;
@@ -287,9 +303,12 @@ export class IndexerService {
       if (processedCount > 0) {
         const currentTime = new Date().toLocaleTimeString();
         if (bullPumpTxCount > 0) {
-          console.log(`🎯 [${currentTime}] Found ${bullPumpTxCount} BullPump tx in ${processedCount} transactions (v${this.lastProcessedVersion})`);
+          console.log(`🎯 [${currentTime}] Found ${bullPumpTxCount} BullPump tx in ${processedCount} txs (v${this.lastProcessedVersion})`);
         } else {
-          console.log(`⚡ [${currentTime}] Processed ${processedCount} tx - Real-time monitoring (v${this.lastProcessedVersion})`);
+          // Only log every 10 checks to reduce noise
+          if (Math.random() < 0.1) {
+            console.log(`⚡ [${currentTime}] Scanned ${processedCount} tx - Ultra-fast monitoring (v${this.lastProcessedVersion})`);
+          }
         }
       }
     } catch (error) {
@@ -328,31 +347,28 @@ export class IndexerService {
   }
 
   private isBullPumpTransaction(transaction: any): boolean {
-    // Minimal debug logging for REAL-TIME performance
-    if (Math.random() < 0.0001) { // Log only 0.01% for maximum speed
-      console.log('🔍 Sample check:', transaction.hash?.substring(0, 10) + '...');
-    }
-
-    // Check if the transaction involves the BullPump contract
+    // Ultra-minimal logging for MAXIMUM speed
+    
+    // Fast check: entry function first (most common case)
     if (transaction.payload && transaction.payload.type === 'entry_function_payload') {
       const functionName = transaction.payload.function;
       const isBullPumpFunction = functionName?.startsWith(this.TOKEN_FACTORY_MODULE) ||
                                 functionName?.startsWith(this.BONDING_CURVE_MODULE);
       
       if (isBullPumpFunction) {
-        console.log('🎯 Found BullPump function call:', functionName);
+        console.log('🎯 BullPump tx found:', transaction.hash?.substring(0, 12) + '...', functionName?.split('::').pop());
         return true;
       }
     }
 
-    // Check events for BullPump contract
-    if (transaction.events) {
+    // Fast check: events (less common)
+    if (transaction.events && transaction.events.length > 0) {
       const hasBullPumpEvent = transaction.events.some((event: any) => 
         event.type?.includes(this.BULLPUMP_CONTRACT)
       );
       
       if (hasBullPumpEvent) {
-        console.log('🎯 Found BullPump event in transaction:', transaction.hash);
+        console.log('🎯 BullPump event found:', transaction.hash?.substring(0, 12) + '...');
         return true;
       }
     }

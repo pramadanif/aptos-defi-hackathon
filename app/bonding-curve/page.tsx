@@ -8,7 +8,7 @@ import { useEffect } from "react";
 
 export default function BondingCurvePage() {
   useEffect(() => {
-    document.title = "Trading | BullPump";
+    document.title = "Trading | ArgoPump";
   }, []);
   return (
     <div className="min-h-screen">

@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 
 export default function LaunchTokenForm() {
-  // BullPump module address from environment
+  // ArgoPump module address from environment
   const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR;
   
   if (!MODULE_ADDR) {
@@ -264,7 +264,7 @@ export default function LaunchTokenForm() {
           >
             <Badge variant="outline" className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border-purple-500/30 text-purple-300 mb-4 px-4 py-1">
               <Sparkles className="w-3 h-3 mr-1" />
-              BullPump
+              ArgoPump
             </Badge>
           </motion.div>
           <motion.h2 
@@ -506,7 +506,7 @@ export default function LaunchTokenForm() {
                       >
                         <ShieldCheck className="w-4 h-4 text-green-400" />
                       </motion.div>
-                      BullPump verified contract
+                      ArgoPump verified contract
                     </div>
                     
                     <motion.div
@@ -608,7 +608,7 @@ export default function LaunchTokenForm() {
                       <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
                       Network: Aptos Testnet
                     </div>
-                    <div>Contract: BullPump Token Factory</div>
+                    <div>Contract: ArgoPump Token Factory</div>
                     <div className="break-all font-mono">
                       Module: {MODULE_ADDR.substring(0, 10)}...
                     </div>

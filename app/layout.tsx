@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../components/ThemeProvider";
 import AptosWalletProvider from "../components/wallet/AptosWalletProvider";
-import BackgroundLiquidChrome from "../components/BackgroundLiquidChrome";
+// import BackgroundLiquidChrome from "../components/BackgroundLiquidChrome";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "BullPump",
-  description: "BullPump - The ultimate bonding curve token launchpad on Aptos",
+  title: "ArgoPump",
+  description: "ArgoPump - The ultimate bonding curve token launchpad on Aptos",
 };
 
 export default function RootLayout({
@@ -29,7 +29,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AptosWalletProvider>
-          <BackgroundLiquidChrome />
+          {/* <BackgroundLiquidChrome /> */}
           <ThemeProvider>{children}</ThemeProvider>
         </AptosWalletProvider>
       </body>

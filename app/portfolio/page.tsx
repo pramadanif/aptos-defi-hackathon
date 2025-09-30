@@ -40,7 +40,7 @@ interface CoinInfo {
 
 export default function PortfolioPage() {
   useEffect(() => {
-    document.title = "Portfolio | BullPump";
+    document.title = "Portfolio | ArgoPump";
   }, []);
 
   const { account, connected } = useWallet();
