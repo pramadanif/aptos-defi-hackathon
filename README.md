@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![ArgoPump Banner](https://via.placeholder.com/800x200/ff006e/ffffff?text=ArgoPump+-+The+Ultimate+Token+Launchpad)
+![ArgoPump Banner](https://i.pinimg.com/736x/8f/d5/b9/8fd5b957fcce04f15127e7b363254ee8.jpg)
 
 **The Ultimate Bonding Curve Token Launchpad on Aptos Blockchain**
 
@@ -19,6 +19,7 @@
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
+- [Smart Contract](#-Smart-Contract)
 - [Key Features](#-key-features)
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
@@ -46,6 +47,12 @@
 - **🎓 Graduation System** - Automatic migration to DEX pools when reaching 21,500 APT threshold
 - **📊 Advanced Analytics** - Comprehensive token metrics, trading volume, and pool statistics
 - **🔗 Blockchain-First** - Direct smart contract integration with no intermediaries
+
+---
+
+## 📃 Smart Contract
+
+For the Smart Contract Detaile go here: [Link](https://github.com/HusseinHato/argopump)
 
 ---
 
