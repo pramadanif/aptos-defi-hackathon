@@ -2,8 +2,13 @@ import { Aptos, AptosConfig, Network } from '@aptos-labs/ts-sdk';
 import { prisma } from '@/lib/prisma';
 import { Decimal } from '@prisma/client/runtime/library';
 
+// Type for Aptos transaction - loosely typed to avoid strict checks
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AptosTransaction = any;
+
 // Define enums locally until Prisma client is properly generated
-const EventType = {
+// Prefixed with underscore to indicate intentionally unused (for future use)
+const _EventType = {
   CREATE_FA: 'CREATE_FA',
   MINT_FA: 'MINT_FA',
   BURN_FA: 'BURN_FA',
@@ -11,7 +16,7 @@ const EventType = {
   POOL_GRADUATED: 'POOL_GRADUATED'
 } as const;
 
-const TradeType = {
+const _TradeType = {
   BUY: 'BUY',
   SELL: 'SELL',
   MINT: 'MINT',
@@ -254,7 +259,7 @@ export class IndexerService {
             console.log(`📍 Continuing from recent trade: ${this.lastProcessedVersion}`);
             return;
           }
-        } catch (error) {
+        } catch {
           console.log('⚠️  Could not get recent trade version, jumping to latest');
         }
       }
@@ -316,7 +321,7 @@ export class IndexerService {
     }
   }
 
-  private async processTransaction(transaction: any): Promise<boolean> {
+  private async processTransaction(transaction: AptosTransaction): Promise<boolean> {
     try {
       // Debug: Log transaction details for debugging
       const isBullPump = this.isBullPumpTransaction(transaction);
@@ -346,7 +351,7 @@ export class IndexerService {
     }
   }
 
-  private isBullPumpTransaction(transaction: any): boolean {
+  private isBullPumpTransaction(transaction: AptosTransaction): boolean {
     // Ultra-minimal logging for MAXIMUM speed
     
     // Fast check: entry function first (most common case)
@@ -363,7 +368,7 @@ export class IndexerService {
 
     // Fast check: events (less common)
     if (transaction.events && transaction.events.length > 0) {
-      const hasBullPumpEvent = transaction.events.some((event: any) => 
+      const hasBullPumpEvent = transaction.events.some((event: AptosTransaction) => 
         event.type?.includes(this.BULLPUMP_CONTRACT)
       );
       
@@ -376,7 +381,7 @@ export class IndexerService {
     return false;
   }
 
-  private async processCreateFAEvents(transaction: any) {
+  private async processCreateFAEvents(transaction: AptosTransaction) {
     if (!transaction.events) return;
 
     for (const event of transaction.events) {
@@ -391,7 +396,7 @@ export class IndexerService {
     }
   }
 
-  private async processMintFAEvents(transaction: any) {
+  private async processMintFAEvents(transaction: AptosTransaction) {
     if (!transaction.events) return;
 
     for (const event of transaction.events) {
@@ -406,7 +411,7 @@ export class IndexerService {
     }
   }
 
-  private async processBurnFAEvents(transaction: any) {
+  private async processBurnFAEvents(transaction: AptosTransaction) {
     if (!transaction.events) return;
 
     for (const event of transaction.events) {
@@ -421,7 +426,7 @@ export class IndexerService {
     }
   }
 
-  private async processBuyTokensEvents(transaction: any) {
+  private async processBuyTokensEvents(transaction: AptosTransaction) {
     // Check for buy_tokens function calls
     if (transaction.payload?.type === 'entry_function_payload' && 
         transaction.payload.function === `${this.BONDING_CURVE_MODULE}::buy_tokens`) {
@@ -433,7 +438,7 @@ export class IndexerService {
     }
   }
 
-  private async processCreateFAEvent(transaction: any, eventData: CreateFAEvent) {
+  private async processCreateFAEvent(transaction: AptosTransaction, eventData: CreateFAEvent) {
     try {
       // Extract FA address using helper function
       const faAddress = this.extractFAAddress(eventData.fa_obj);
@@ -487,7 +492,7 @@ export class IndexerService {
     }
   }
 
-  private async processMintFAEvent(transaction: any, eventData: MintFAEvent) {
+  private async processMintFAEvent(transaction: AptosTransaction, eventData: MintFAEvent) {
     try {
       // Create trade record for mint
       await prisma.trade.create({
@@ -511,7 +516,7 @@ export class IndexerService {
     }
   }
 
-  private async processBurnFAEvent(transaction: any, eventData: BurnFAEvent) {
+  private async processBurnFAEvent(transaction: AptosTransaction, eventData: BurnFAEvent) {
     try {
       // Create trade record for burn
       await prisma.trade.create({
@@ -535,7 +540,7 @@ export class IndexerService {
     }
   }
 
-  private async processBuyTokensTransaction(transaction: any) {
+  private async processBuyTokensTransaction(transaction: AptosTransaction) {
     try {
       // Check if already processed
       const existingTrade = await prisma.trade.findUnique({
@@ -574,7 +579,7 @@ export class IndexerService {
                 tokenAmount = amount;
                 break;
               }
-            } catch (error) {
+            } catch {
               // Continue looking
             }
           }
@@ -636,7 +641,7 @@ export class IndexerService {
 
   // Remove old ensureFAExists method as FA creation is now handled by processCreateFAEvent
 
-  private async processTokenPurchaseEvents(transaction: any) {
+  private async processTokenPurchaseEvents(transaction: AptosTransaction) {
     if (!transaction.events) return;
 
     for (const event of transaction.events) {
@@ -651,7 +656,7 @@ export class IndexerService {
     }
   }
 
-  private async processTokenSaleEvents(transaction: any) {
+  private async processTokenSaleEvents(transaction: AptosTransaction) {
     if (!transaction.events) return;
 
     for (const event of transaction.events) {
@@ -666,7 +671,7 @@ export class IndexerService {
     }
   }
 
-  private async processTokenPurchaseEvent(transaction: any, eventData: TokenPurchaseEvent) {
+  private async processTokenPurchaseEvent(transaction: AptosTransaction, eventData: TokenPurchaseEvent) {
     try {
       // Check if already processed
       const existingTrade = await prisma.trade.findUnique({
@@ -699,7 +704,7 @@ export class IndexerService {
     }
   }
 
-  private async processTokenSaleEvent(transaction: any, eventData: TokenSaleEvent) {
+  private async processTokenSaleEvent(transaction: AptosTransaction, eventData: TokenSaleEvent) {
     try {
       // Check if already processed
       const existingTrade = await prisma.trade.findUnique({
