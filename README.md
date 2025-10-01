@@ -52,7 +52,7 @@
 
 ## 📃 Smart Contract
 
-For the Smart Contract Detaile go here: [Link](https://github.com/HusseinHato/argopump)
+For the Smart Contract Details go here: [Link](https://github.com/HusseinHato/argopump)
 
 ---
 
