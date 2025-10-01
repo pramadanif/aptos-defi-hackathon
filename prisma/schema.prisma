@@ -1,0 +1,96 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model FA {
+  address      String @id
+  name         String
+  symbol       String
+  creator      String
+  decimals     Int    @default(8)
+  max_supply   Decimal?
+  icon_uri     String?
+  project_uri  String?
+  mint_fee_per_unit Decimal @default(0)
+  created_at   DateTime @default(now())
+  
+  trades       Trade[]
+  pool_stats   PoolStats?
+  events       FAEvent[]
+}
+
+model Trade {
+  id               String   @id @default(cuid())
+  transaction_hash String   @unique
+  transaction_version String?
+  
+  // Basic trade info
+  fa_address       String
+  user_address     String
+  apt_amount       Decimal  // APT paid (including fees)
+  token_amount     Decimal  // Tokens received
+  price_per_token  Decimal  // APT per token
+  fee_amount       Decimal  @default(0) // Fee paid
+  
+  // Trade type
+  trade_type       TradeType @default(BUY)
+  
+  created_at       DateTime @default(now())
+  
+  fa FA @relation(fields: [fa_address], references: [address])
+}
+
+model PoolStats {
+  fa_address      String   @id
+  apt_reserves    Decimal
+  total_volume    Decimal  @default(0)
+  trade_count     Int      @default(0)
+  is_graduated    Boolean  @default(false)
+  graduation_threshold Decimal @default(2150000000000) // 21500 APT in octas
+  dex_pool_addr   String?  // DEX pool address after graduation (0x... 66 characters)
+  
+  updated_at      DateTime @updatedAt
+  
+  fa FA @relation(fields: [fa_address], references: [address])
+}
+
+model FAEvent {
+  id               String   @id @default(cuid())
+  transaction_hash String
+  transaction_version String?
+  
+  fa_address       String
+  event_type       EventType
+  event_data       Json
+  
+  created_at       DateTime @default(now())
+  
+  fa FA @relation(fields: [fa_address], references: [address])
+  
+  @@index([fa_address, event_type])
+  @@index([transaction_hash])
+}
+
+enum TradeType {
+  BUY
+  SELL
+  MINT
+  BURN
+}
+
+enum EventType {
+  CREATE_FA
+  MINT_FA  
+  BURN_FA
+  BUY_TOKENS
+  POOL_GRADUATED
+}

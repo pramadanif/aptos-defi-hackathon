@@ -6,7 +6,7 @@
   
   /* Helen's Night Mart Color Palette */
   --deep-navy: #1a1f2e;
-  --electric-pink: #ff006e;
+  --electric-pink: #fa599f;
   --bright-cyan: #00f5ff;
   --neon-green: #39ff14;
   --warm-orange: #ff8500;
@@ -253,17 +253,11 @@
   }
   
   .bg-gradient-primary {
-    background: linear-gradient(135deg,
-      color-mix(in oklab, var(--electric-pink) 86%, transparent) 0%,
-      color-mix(in oklab, var(--bright-cyan) 86%, transparent) 100%
-    );
+    background: var(--electric-pink);
   }
   
   .bg-gradient-secondary {
-    background: linear-gradient(135deg,
-      color-mix(in oklab, var(--neon-green) 82%, transparent) 0%,
-      color-mix(in oklab, var(--warm-orange) 78%, transparent) 100%
-    );
+    background: var(--bright-cyan);
   }
 
   /* Floating gradient animation */

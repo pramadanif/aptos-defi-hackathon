@@ -8,14 +8,27 @@ import { Network } from "@aptos-labs/ts-sdk";
 
 export default function AptosWalletProvider({ children }: { children: ReactNode }) {
   const onError = (error: unknown) => {
+    // Check if it's a user rejection first
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("User has rejected") || 
+        errorMessage.includes("rejected") ||
+        errorMessage.includes("cancelled") ||
+        errorMessage.includes("denied") ||
+        (error as any)?.code === 4001 || // Standard rejection code
+        (error as any)?.code === "USER_REJECTED") {
+      // Don't log or show toast for user rejections - let the specific handlers deal with it
+      return;
+    }
+    
+    // Only log and show toast for actual errors (not rejections)
     console.error(error);
     toast.error("Wallet error", {
-      description: error instanceof Error ? error.message : String(error),
+      description: errorMessage,
     });
   };
   
   // Whitelist extension wallets; cast to any to avoid mismatch with AvailableWallets typings across versions
-  const OPT_IN_WALLETS = ["Petra", "Martian", "OKX Wallet"] as unknown as any;
+  const OPT_IN_WALLETS = ["Petra", "Martian", "Martian Wallet", "OKX Wallet", "Pontem Wallet"] as unknown as any;
 
   return (
     <AptosWalletAdapterProvider
