@@ -757,40 +757,92 @@ Create `vercel.json`:
 ## 📂 Project Structure
 
 ```
-argopump/
+aptos-defi/
 ├── app/                          # Next.js App Router
 │   ├── api/                      # API routes
-│   │   ├── indexer/              # Indexer endpoints
-│   │   ├── tokens/               # Token endpoints
-│   │   └── trades/               # Trade endpoints
-│   ├── coin/[address]/           # Token detail page
-│   ├── bonding-curve/            # Trading page
-│   ├── launch/                   # Token creation page
-│   ├── portfolio/                # Portfolio page
-│   ├── layout.tsx                # Root layout
-│   └── page.tsx                  # Home page
+│   │   ├── debug/                # Debug utilities
+│   │   ├── health/               # Health check endpoint
+│   │   ├── indexer/              # Indexer endpoints (start, status, cron)
+│   │   ├── tokens/               # Token endpoints (list, detail, search, trending)
+│   │   └── trades/               # Trade endpoints (recent trades)
+│   ├── coin/[address]/           # Token detail page with trading
+│   ├── bonding-curve/            # Trading dashboard page
+│   ├── launch/                   # Token creation launchpad
+│   ├── portfolio/                # User portfolio page
+│   ├── layout.tsx                # Root layout with providers
+│   ├── page.tsx                  # Home page with hero
+│   └── globals.css               # Global styles
 ├── components/                   # React components
-│   ├── ui/                       # Radix UI components
-│   ├── wallet/                   # Wallet adapter
-│   ├── Header.tsx                # Navigation header
-│   ├── HeroSection.tsx           # Landing hero
+│   ├── ui/                       # Radix UI components (48 components)
+│   │   ├── button.tsx            # Button component
+│   │   ├── card.tsx              # Card component
+│   │   ├── tabs.tsx              # Tabs component
+│   │   └── ...                   # Other UI primitives
+│   ├── wallet/                   # Wallet integration
+│   │   └── AptosWalletProvider.tsx
+│   ├── BondingCurveTrading.tsx   # Trading interface component
+│   ├── Header.tsx                # Navigation header with search
+│   ├── Footer.tsx                # Footer component
+│   ├── HeroSection.tsx           # Landing page hero
+│   ├── TrendingSection.tsx       # Trending tokens display
 │   ├── TokenCard.tsx             # Token display card
-│   └── BondingCurveTrading.tsx   # Trading interface
+│   ├── LaunchTokenForm.tsx       # Token creation form
+│   ├── TradingDashboard.tsx      # Trading dashboard
+│   ├── ThemeProvider.tsx         # Dark mode provider
+│   ├── BackgroundLiquidChrome.tsx # 3D background effects
+│   └── BackgroundParticles.tsx   # Particle effects
 ├── lib/                          # Utilities & services
-│   ├── services/                 # Business logic
-│   │   └── indexer.ts            # Blockchain indexer
-│   ├── prisma.ts                 # Database client
+│   ├── services/                 # Business logic services
+│   │   └── indexer.ts            # Real-time blockchain indexer
+│   ├── types/                    # TypeScript type definitions
+│   │   └── index.ts              # Shared types
+│   ├── prisma.ts                 # Prisma database client
 │   ├── indexer-startup.ts        # Indexer initialization
-│   └── indexer-autostart.ts      # Auto-start logic
-├── prisma/                       # Database
-│   ├── schema.prisma             # Database schema
+│   └── reset-indexer.ts          # Indexer reset utility
+├── prisma/                       # Database configuration
+│   ├── schema.prisma             # Database schema (FA, Trade, PoolStats)
 │   └── migrations/               # Migration files
 ├── public/                       # Static assets
-├── .env.local                    # Environment variables
-├── next.config.js                # Next.js configuration
-├── tailwind.config.ts            # Tailwind configuration
+│   └── ...                       # Images, icons, etc.
+├── .env.local                    # Environment variables (local)
+├── .env.example                  # Environment template
+├── vercel.json                   # Vercel deployment config
+├── next.config.ts                # Next.js configuration
+├── tailwind.config.ts            # Tailwind CSS configuration
 ├── tsconfig.json                 # TypeScript configuration
-└── package.json                  # Dependencies
+├── package.json                  # Dependencies & scripts
+├── eslint.config.mjs             # ESLint configuration
+└── postcss.config.mjs            # PostCSS configuration
+```
+
+### Key Directories Explained
+
+**`app/api/`** - Backend API routes
+- `indexer/` - Blockchain indexer management (start, status, cron job)
+- `tokens/` - Token operations (list all, get details, search, trending)
+- `trades/` - Trading history and recent trades
+- `health/` - Application health check
+- `debug/` - Development debugging tools
+
+**`components/ui/`** - 48+ Reusable UI components
+- Built with Radix UI primitives
+- Fully accessible and customizable
+- Consistent design system
+
+**`lib/services/`** - Core business logic
+- `indexer.ts` - Real-time blockchain event monitoring (1s polling)
+
+**`prisma/`** - Database layer
+- Schema defines FA tokens, trades, pool stats, and events
+- Migrations track database changes
+
+**Documentation Files**
+- `README.md` - Main documentation (this file)
+- `API_KEY_SETUP.md` - Aptos API key configuration
+- `VERCEL_DEPLOYMENT.md` - Deployment guide
+- `ROUTER_IMPLEMENTATION.md` - DEX router integration
+- `ULTRA_FAST_INDEXER.md` - Indexer performance guide
+- And more... (see root directory)
 ```
 
 ---
