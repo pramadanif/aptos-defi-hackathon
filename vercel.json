@@ -12,11 +12,5 @@
       "path": "/api/indexer/cron",
       "schedule": "0 0 * * *"
     }
-  ],
-  "env": {
-    "DATABASE_URL": "@database_url",
-    "DIRECT_URL": "@direct_url",
-    "APTOS_NODE_URL": "@aptos_node_url",
-    "BULLPUMP_CONTRACT_ADDRESS": "@bullpump_contract_address"
-  }
+  ]
 }
