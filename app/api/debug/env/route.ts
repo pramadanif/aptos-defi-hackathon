@@ -11,10 +11,10 @@ export async function GET() {
       expectedAddr: "0x4660906d4ed4062029a19e989e51c814aa5b0711ef0ba0433b5f7487cb03b257",
       allEnvVars: Object.keys(process.env).filter(key => key.startsWith('NEXT_PUBLIC_'))
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({ 
       error: "Failed to check environment", 
-      details: error?.message || String(error) 
+      details: error instanceof Error ? error.message : String(error) 
     }, { status: 500 });
   }
 }

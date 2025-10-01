@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Test 2: Try to get token metadata
-    const metadata: any = {};
+    const metadata: Record<string, unknown> = {};
     try {
       const nameResult = await aptos.view({
         payload: {
@@ -53,8 +53,8 @@ export async function GET(request: NextRequest) {
         }
       });
       metadata.name = nameResult[0];
-    } catch (e: any) {
-      metadata.nameError = e?.message || String(e);
+    } catch (e: unknown) {
+      metadata.nameError = e instanceof Error ? e.message : String(e);
     }
 
     try {
@@ -66,8 +66,8 @@ export async function GET(request: NextRequest) {
         }
       });
       metadata.symbol = symbolResult[0];
-    } catch (e: any) {
-      metadata.symbolError = e?.message || String(e);
+    } catch (e: unknown) {
+      metadata.symbolError = e instanceof Error ? e.message : String(e);
     }
 
     try {
@@ -79,12 +79,12 @@ export async function GET(request: NextRequest) {
         }
       });
       metadata.decimals = decimalsResult[0];
-    } catch (e: any) {
-      metadata.decimalsError = e?.message || String(e);
+    } catch (e: unknown) {
+      metadata.decimalsError = e instanceof Error ? e.message : String(e);
     }
 
     // Test 3: Try to get bonding curve data
-    const bondingCurve: any = {};
+    const bondingCurve: Record<string, unknown> = {};
     try {
       const aptReserves = await aptos.view({
         payload: {
@@ -94,8 +94,8 @@ export async function GET(request: NextRequest) {
         }
       });
       bondingCurve.aptReserves = aptReserves[0];
-    } catch (e: any) {
-      bondingCurve.aptReservesError = e?.message || String(e);
+    } catch (e: unknown) {
+      bondingCurve.aptReservesError = e instanceof Error ? e.message : String(e);
     }
 
     try {
@@ -107,8 +107,8 @@ export async function GET(request: NextRequest) {
         }
       });
       bondingCurve.tokenReserves = tokenReserves[0];
-    } catch (e: any) {
-      bondingCurve.tokenReservesError = e?.message || String(e);
+    } catch (e: unknown) {
+      bondingCurve.tokenReservesError = e instanceof Error ? e.message : String(e);
     }
 
     // Test 4: Check account balance for a test address
@@ -129,8 +129,8 @@ export async function GET(request: NextRequest) {
       } else {
         balance = { error: `HTTP ${balanceResponse.status}` };
       }
-    } catch (e: any) {
-      balance = { error: e?.message || String(e) };
+    } catch (e: unknown) {
+      balance = { error: e instanceof Error ? e.message : String(e) };
     }
 
     return NextResponse.json({
@@ -142,11 +142,11 @@ export async function GET(request: NextRequest) {
       moduleAddr: MODULE_ADDR
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Debug error:", error);
     return NextResponse.json({ 
       error: "Debug failed", 
-      details: error?.message || String(error) 
+      details: error instanceof Error ? error.message : String(error) 
     }, { status: 500 });
   }
 }
