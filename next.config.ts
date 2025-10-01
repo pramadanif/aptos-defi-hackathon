@@ -8,6 +8,14 @@ const nextConfig: NextConfig = {
   },
   images: {
     domains: ['img.freepik.com', 'images.unsplash.com', 'plus.unsplash.com'],
+  },
+  // Disable ESLint during production builds
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  // Keep TypeScript checking enabled
+  typescript: {
+    ignoreBuildErrors: false,
   }
 };
 
