@@ -10,7 +10,7 @@
   "crons": [
     {
       "path": "/api/indexer/cron",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 0 * * *"
     }
   ],
   "env": {
