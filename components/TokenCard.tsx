@@ -1,7 +1,6 @@
 "use client";
 
 import { Card, CardContent } from "./ui/card";
-import { Button } from "./ui/button";
 import { Progress } from "./ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { Badge } from "./ui/badge";

@@ -24,7 +24,8 @@ const formatCompactNumber = (value: string | number, decimals = 2) => {
   return num.toFixed(decimals < 2 ? decimals : 2);
 };
 
-// Mock data
+// Mock data - kept for reference but not used
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const mockTokens = [
   {
     id: "1",
@@ -110,7 +111,25 @@ const mockTokens = [
 
 export function TrendingSection() {
   const router = useRouter();
-  const [tokens, setTokens] = useState<any[]>([]);
+  interface Token {
+    address: string;
+    name: string;
+    symbol: string;
+    pool_stats?: {
+      apt_reserves?: string;
+      trade_count?: number;
+      is_graduated?: boolean;
+      total_volume?: string;
+      graduation_threshold?: string;
+    };
+    creator: string;
+    icon_uri?: string;
+    project_uri?: string;
+    decimals: number;
+    created_at: string;
+  }
+  
+  const [tokens, setTokens] = useState<Token[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Fetch tokens from API
@@ -266,7 +285,25 @@ export function TrendingSection() {
   );
 }
 
-function TokenGrid({ tokens }: { tokens: any[] }) {
+interface TokenGridToken {
+  address: string;
+  name: string;
+  symbol: string;
+  pool_stats?: {
+    apt_reserves?: string;
+    trade_count?: number;
+    is_graduated?: boolean;
+    total_volume?: string;
+    graduation_threshold?: string;
+  };
+  creator: string;
+  icon_uri?: string;
+  project_uri?: string;
+  decimals: number;
+  created_at: string;
+}
+
+function TokenGrid({ tokens }: { tokens: TokenGridToken[] }) {
   if (tokens.length === 0) {
     return (
       <div className="text-center py-12">

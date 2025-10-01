@@ -6,8 +6,8 @@ import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { motion } from "framer-motion";
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Area, AreaChart } from "recharts";
-import { TrendingUp, TrendingDown, Activity, DollarSign, BarChart3, Zap } from "lucide-react";
+import { XAxis, YAxis, ResponsiveContainer, Area, AreaChart } from "recharts";
+import { TrendingUp, TrendingDown, Activity, BarChart3, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 
 // Mock chart data

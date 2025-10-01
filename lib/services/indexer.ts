@@ -6,23 +6,6 @@ import { Decimal } from '@prisma/client/runtime/library';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AptosTransaction = any;
 
-// Define enums locally until Prisma client is properly generated
-// Prefixed with underscore to indicate intentionally unused (for future use)
-const _EventType = {
-  CREATE_FA: 'CREATE_FA',
-  MINT_FA: 'MINT_FA',
-  BURN_FA: 'BURN_FA',
-  BUY_TOKENS: 'BUY_TOKENS',
-  POOL_GRADUATED: 'POOL_GRADUATED'
-} as const;
-
-const _TradeType = {
-  BUY: 'BUY',
-  SELL: 'SELL',
-  MINT: 'MINT',
-  BURN: 'BURN'
-} as const;
-
 interface CreateFAEvent {
   creator_addr: string;
   fa_obj: { inner: string } | string; // Object<Metadata>
