@@ -81,7 +81,7 @@ For the Smart Contract Details go here: [Link](https://github.com/HusseinHato/ar
 ### 📊 Portfolio Management
 - **Multi-Wallet Support** - Petra, Martian, Pontem wallets
 - **Real-Time Balances** - Live balance updates from blockchain
-- **Token Discovery** - Automatic detection of BullPump tokens
+- **Token Discovery** - Automatic detection of ArgoPump tokens
 - **Portfolio Analytics** - Total value, asset distribution, P&L tracking
 
 ### 🔍 Search & Discovery
@@ -93,7 +93,7 @@ For the Smart Contract Details go here: [Link](https://github.com/HusseinHato/ar
 ### ⚡ Real-Time Indexer
 - **1-Second Polling** - Ultra-fast blockchain monitoring
 - **Instant Detection** - 1-3 second delay after on-chain confirmation
-- **Event Tracking** - All BullPump events (Create, Buy, Sell, Graduation)
+- **Event Tracking** - All ArgoPump events (Create, Buy, Sell, Graduation)
 - **Auto-Start** - Automatic initialization on server startup
 - **Smart Resume** - Continues from last processed transaction
 
@@ -183,29 +183,39 @@ For the Smart Contract Details go here: [Link](https://github.com/HusseinHato/ar
 ## 🛠 Tech Stack
 
 ### Frontend
-- **[Next.js 15.5](https://nextjs.org/)** - React framework with App Router
-- **[React 19.1](https://reactjs.org/)** - UI library
-- **[TypeScript 5.0](https://www.typescriptlang.org/)** - Type-safe JavaScript
-- **[Tailwind CSS 4.0](https://tailwindcss.com/)** - Utility-first CSS framework
-- **[Framer Motion 12.23](https://www.framer.com/motion/)** - Animation library
-- **[Radix UI](https://www.radix-ui.com/)** - Unstyled, accessible components
-- **[Lucide Icons](https://lucide.dev/)** - Beautiful icon library
-- **[Three.js 0.179](https://threejs.org/)** - 3D graphics library
+- **[Next.js 15.5.2](https://nextjs.org/)** - React framework with App Router & Turbopack
+- **[React 19.1.0](https://reactjs.org/)** - UI library with latest features
+- **[TypeScript 5.x](https://www.typescriptlang.org/)** - Type-safe JavaScript
+- **[Tailwind CSS 4.x](https://tailwindcss.com/)** - Utility-first CSS framework
+- **[Framer Motion 12.23.12](https://www.framer.com/motion/)** - Production-ready animation library
+- **[Radix UI](https://www.radix-ui.com/)** - 25+ unstyled, accessible component primitives
+- **[Lucide React 0.542.0](https://lucide.dev/)** - Beautiful & consistent icon library
+- **[Three.js 0.179.1](https://threejs.org/)** - WebGL 3D graphics library
+- **[Postprocessing 6.37.7](https://github.com/pmndrs/postprocessing)** - Post-processing effects for Three.js
+- **[Next Themes 0.4.6](https://github.com/pacocoursey/next-themes)** - Perfect dark mode support
+- **[Recharts 3.1.2](https://recharts.org/)** - Composable charting library
+- **[Sonner 2.0.7](https://sonner.emilkowal.ski/)** - Opinionated toast notifications
+- **[cmdk 1.1.1](https://cmdk.paco.me/)** - Command menu for React
+- **[CVA 0.7.1](https://cva.style/)** - Class variance authority for component variants
+- **[Tailwind Merge 3.3.1](https://github.com/dcastil/tailwind-merge)** - Merge Tailwind classes intelligently
 
 ### Backend
-- **[Prisma 6.16](https://www.prisma.io/)** - Type-safe ORM
-- **[PostgreSQL](https://www.postgresql.org/)** - Relational database
-- **[Node.js](https://nodejs.org/)** - JavaScript runtime
+- **[Prisma 6.16.2](https://www.prisma.io/)** - Next-generation type-safe ORM
+- **[PostgreSQL](https://www.postgresql.org/)** - Powerful relational database
+- **[pg 8.16.3](https://node-postgres.com/)** - Non-blocking PostgreSQL client
+- **[Node.js 20+](https://nodejs.org/)** - JavaScript runtime environment
 
 ### Blockchain
-- **[Aptos SDK 5.1](https://github.com/aptos-labs/aptos-ts-sdk)** - Aptos TypeScript SDK
-- **[Wallet Adapter 7.0](https://github.com/aptos-labs/aptos-wallet-adapter)** - Multi-wallet support
-- **[BullPump Contract](https://explorer.aptoslabs.com/)** - Custom Move smart contracts
+- **[Aptos SDK 5.1.0](https://github.com/aptos-labs/aptos-ts-sdk)** - Official Aptos TypeScript SDK
+- **[Wallet Adapter 7.0.4](https://github.com/aptos-labs/aptos-wallet-adapter)** - Multi-wallet React integration (Petra, Martian, Pontem)
+- **[ArgoPump Contract](https://explorer.aptoslabs.com/account/0xf937c2d4a8ed5d30141b4911593543dd5975eab3a0e6d75105783205996e516f?network=testnet)** - Custom Move smart contracts for bonding curves
 
-### DevOps
-- **[Vercel](https://vercel.com/)** - Hosting platform
-- **[Supabase](https://supabase.com/)** - PostgreSQL hosting
-- **[Turbopack](https://turbo.build/)** - Fast bundler
+### DevOps & Tooling
+- **[Vercel](https://vercel.com/)** - Serverless deployment platform
+- **[Supabase](https://supabase.com/)** - Managed PostgreSQL with connection pooling
+- **[Turbopack](https://turbo.build/)** - Next.js 15 native bundler (10x faster)
+- **[ESLint 9](https://eslint.org/)** - Code linting with Next.js config
+- **[PostCSS](https://postcss.org/)** - CSS transformations
 
 ---
 
@@ -223,8 +233,8 @@ For the Smart Contract Details go here: [Link](https://github.com/HusseinHato/ar
 #### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/argopump.git
-cd argopump
+git clone https://github.com/yourusername/aptos-defi.git
+cd aptos-defi
 ```
 
 #### 2. Install Dependencies
@@ -243,7 +253,7 @@ Create `.env.local` file in the root directory:
 # ═══════════════════════════════════════════════════════
 #  Frontend Configuration
 # ═══════════════════════════════════════════════════════
-NEXT_PUBLIC_MODULE_ADDR=0x4660906d4ed4062029a19e989e51c814aa5b0711ef0ba0433b5f7487cb03b257
+NEXT_PUBLIC_MODULE_ADDR=0xf937c2d4a8ed5d30141b4911593543dd5975eab3a0e6d75105783205996e516f
 NEXT_PUBLIC_APTOS_NODE_URL=https://api.testnet.aptoslabs.com
 NEXT_PUBLIC_APTOS_FAUCET_URL=https://faucet.testnet.aptoslabs.com
 NEXT_PUBLIC_APTOS_API_KEY=your_aptos_api_key_here
@@ -253,10 +263,10 @@ NEXT_PUBLIC_APTOS_API_KEY=your_aptos_api_key_here
 # ═══════════════════════════════════════════════════════
 APTOS_NODE_URL=https://fullnode.testnet.aptoslabs.com/v1
 APTOS_API_KEY=your_aptos_api_key_here
-BULLPUMP_CONTRACT_ADDRESS=0x4660906d4ed4062029a19e989e51c814aa5b0711ef0ba0433b5f7487cb03b257
+ARGOPUMP_CONTRACT_ADDRESS=0xf937c2d4a8ed5d30141b4911593543dd5975eab3a0e6d75105783205996e516f
 
 # Optional: Router Module (for DEX swaps)
-NEXT_PUBLIC_ARGO_ROUTER_ADDR=0x4660906d4ed4062029a19e989e51c814aa5b0711ef0ba0433b5f7487cb03b257
+NEXT_PUBLIC_ARGO_ROUTER_ADDR=0xf937c2d4a8ed5d30141b4911593543dd5975eab3a0e6d75105783205996e516f
 
 # ═══════════════════════════════════════════════════════
 #  Database Configuration (Supabase)
@@ -440,7 +450,7 @@ ArgoPump features a **real-time blockchain indexer** that monitors Aptos blockch
 - **📦 Batch Processing** - 500 transactions per check
 - **🎯 Smart Initialization** - Starts from latest, skips old history
 - **🔄 Auto-Resume** - Continues from last processed transaction
-- **📊 Event Detection** - Tracks all BullPump events
+- **📊 Event Detection** - Tracks all ArgoPump events
 - **🚀 Auto-Start** - Initializes automatically on server startup
 
 ### Configuration
@@ -716,7 +726,7 @@ NEXT_PUBLIC_ARGO_ROUTER_ADDR
 # Backend
 APTOS_NODE_URL
 APTOS_API_KEY
-BULLPUMP_CONTRACT_ADDRESS
+ARGOPUMP_CONTRACT_ADDRESS
 
 # Database
 DATABASE_URL
@@ -861,8 +871,8 @@ We welcome contributions! Please follow these steps:
 ### 1. Fork the Repository
 
 ```bash
-git clone https://github.com/yourusername/argopump.git
-cd argopump
+git clone https://github.com/yourusername/aptos-defi.git
+cd aptos-defi
 ```
 
 ### 2. Create a Branch
@@ -923,6 +933,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 **Built with ❤️ by the ArgoPump Team**
 
-[Website](https://argopump.io) • [Documentation](./docs) • [Twitter](https://twitter.com/argopump) • [Discord](https://discord.gg/argopump)
+[Website](https://argopump.xyz) • [GitHub](https://github.com/yourusername/aptos-defi) • [Smart Contract](https://github.com/HusseinHato/argopump)
 
 </div>
