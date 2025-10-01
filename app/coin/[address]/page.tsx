@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useWallet } from "@aptos-labs/wallet-adapter-react";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
-import { useMemo } from "react";
 import { Progress } from "@/components/ui/progress";
 import {
   TrendingUp,
@@ -43,10 +42,28 @@ import Link from "next/link";
 // Utility functions
 const formatNumber = (value: string | number, decimals = 2) => {
   const num = typeof value === 'string' ? parseFloat(value) : value;
-  if (num >= 1e9) return `${(num / 1e9).toFixed(decimals)}B`;
-  if (num >= 1e6) return `${(num / 1e6).toFixed(decimals)}M`;
-  if (num >= 1e3) return `${(num / 1e3).toFixed(decimals)}K`;
-  return num.toFixed(decimals);
+  if (isNaN(num)) return '0.00';
+  
+  // For balance display, use comma separators without suffix
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+};
+
+const formatCompactNumber = (value: string | number, decimals = 2) => {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0';
+  
+  const absNum = Math.abs(num);
+  
+  if (absNum >= 1e9) return `${(num / 1e9).toFixed(decimals)}B`;
+  if (absNum >= 1e6) return `${(num / 1e6).toFixed(decimals)}M`;
+  if (absNum >= 1e3) return `${(num / 1e3).toFixed(decimals)}K`;
+  
+  // For numbers less than 1000, show with appropriate decimals
+  if (absNum < 1) return num.toFixed(decimals);
+  return num.toFixed(decimals < 2 ? decimals : 2);
 };
 
 const formatAddress = (addr: string) => {
@@ -98,6 +115,7 @@ interface TokenInfo {
   trade_count?: number;
   icon_uri?: string;
   project_uri?: string;
+  dex_pool_addr?: string;
 }
 
 interface CoinInfo {
@@ -151,12 +169,12 @@ function InfoTicker({ token }: { token: TokenDetail }) {
   const tickerItems = [
     {
       label: "Volume 24h",
-      value: `${formatNumber(token.volume_24h)} APT`,
+      value: `${formatCompactNumber(Number(token.pool_stats?.total_volume || 0) / 1e8, 2)} APT`,
       icon: "📊"
     },
     {
       label: "Total Trades",
-      value: `${token.pool_stats?.trade_count || 0}`,
+      value: formatCompactNumber(token.pool_stats?.trade_count || 0, 0),
       icon: "⚡"
     },
     {
@@ -318,18 +336,27 @@ export default function CoinDetailPage() {
   const GRADUATION_THRESHOLD = 21500;
   const VIRTUAL_APT_RESERVES = 28.24;
 
-  const [token, setToken] = useState<TokenDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<any>(null);
+  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("buy");
   const [aptAmount, setAptAmount] = useState("");
   const [tokenAmount, setTokenAmount] = useState("");
-  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
+  const [userTokenBalance, setUserTokenBalance] = useState<number>(0); // Real-time balance in octas
+  
+  // TEST MODE: Force graduated status for testing DEX interface
+  const [testGraduatedMode, setTestGraduatedMode] = useState(false);
 
   const MODULE_ADDR = process.env.NEXT_PUBLIC_MODULE_ADDR;
+  // Optional: dedicated ArgoPump router module address
+  const ROUTER_ADDR = process.env.NEXT_PUBLIC_ARGO_ROUTER_ADDR || MODULE_ADDR;
 
   if (!MODULE_ADDR) {
     throw new Error("NEXT_PUBLIC_MODULE_ADDR environment variable is required");
+  }
+  if (!ROUTER_ADDR) {
+    throw new Error("Router module address is not set (NEXT_PUBLIC_ARGO_ROUTER_ADDR or NEXT_PUBLIC_MODULE_ADDR)");
   }
 
   const config = useMemo(() => {
@@ -351,24 +378,73 @@ export default function CoinDetailPage() {
 
   const aptos = useMemo(() => new Aptos(config), [config]);
 
+  // --- Helper encoders for ArgoPump::router::swap(args: vector<u8>) ---
+  const encodeU64LE = (value: bigint) => {
+    const buf = new ArrayBuffer(8);
+    const view = new DataView(buf);
+    // little-endian
+    view.setBigUint64(0, value, true);
+    return new Uint8Array(buf);
+  };
+
+  const hexToBytes32 = (hex: string) => {
+    const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+    if (clean.length !== 64) throw new Error("pool_addr must be 32 bytes hex string");
+    const out = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      out[i] = parseInt(clean.substr(i * 2, 2), 16);
+    }
+    return out;
+  };
+
+  const encodeRouterSwapArgs = (
+    poolAddr: string,
+    assetInIndex: number,
+    assetOutIndex: number,
+    amountIn: bigint,
+    minAmountOut: bigint,
+  ): number[] => {
+    const parts: number[] = [];
+    const poolAddrBytes = hexToBytes32(poolAddr);
+    parts.push(...Array.from(poolAddrBytes));
+    parts.push(assetInIndex & 0xff);
+    parts.push(assetOutIndex & 0xff);
+    parts.push(...Array.from(encodeU64LE(amountIn)));
+    parts.push(...Array.from(encodeU64LE(minAmountOut)));
+    return parts;
+  };
+
   // Function to get balance using direct API endpoint (EXACT COPY from portfolio)
   const getBalanceFromAPI = async (address: string, assetType: string): Promise<string> => {
+    console.log(`🔎 getBalanceFromAPI called:`, {
+      userAddress: address,
+      assetType: assetType,
+      apiUrl: `https://api.testnet.aptoslabs.com/v1/accounts/${address.startsWith('0x') ? address.slice(2) : address}/balance/${encodeURIComponent(assetType)}`
+    });
+
     try {
       // Clean address - remove 0x prefix if present for URL
       const cleanAddress = address.startsWith('0x') ? address.slice(2) : address;
       
-      const response = await fetch(
-        `https://api.testnet.aptoslabs.com/v1/accounts/${cleanAddress}/balance/${encodeURIComponent(assetType)}`,
-        {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json, application/x-bcs'
-          }
+      const apiUrl = `https://api.testnet.aptoslabs.com/v1/accounts/${cleanAddress}/balance/${encodeURIComponent(assetType)}`;
+      console.log(`📡 Fetching from: ${apiUrl}`);
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json, application/x-bcs'
         }
-      );
+      });
+
+      console.log(`📥 API Response:`, {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
+      });
 
       if (!response.ok) {
         if (response.status === 404) {
+          console.warn(`⚠️ Asset not found (404) - returning 0 balance`);
           return "0"; // Asset not found means 0 balance
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -378,10 +454,16 @@ export default function CoinDetailPage() {
       const balanceText = await response.text();
       const balance = balanceText.trim().replace(/"/g, ''); // Remove quotes if present
       
-      console.log(`Balance for ${assetType}: ${balance}`);
+      console.log(`✅ Balance retrieved successfully:`, {
+        assetType,
+        balanceText,
+        balanceParsed: balance,
+        balanceInTokens: Number(balance) / 100000000
+      });
+      
       return balance || "0";
     } catch (error) {
-      console.warn(`Failed to get balance for ${assetType}:`, error);
+      console.error(`❌ Failed to get balance for ${assetType}:`, error);
       return "0";
     }
   };
@@ -462,37 +544,40 @@ export default function CoinDetailPage() {
     }
   };
 
-  // Function to get user's token balance using getCoinInfo for correct decimals
-  const getUserTokenBalance = async (faObjectAddr: string): Promise<number> => {
-    if (!account?.address) return 0;
 
-    try {
-      // Get balance from API
-      const balanceRaw = await getBalanceFromAPI(account.address, faObjectAddr);
-      
-      if (balanceRaw === "0") {
-        console.log(`💰 No balance for ${faObjectAddr}`);
-        return 0;
-      }
-
-      // Get coin info to determine correct decimals
-      const coinInfo = await getCoinInfo(faObjectAddr);
-      const divisor = Math.pow(10, coinInfo.decimals);
-      const balanceNum = Number(balanceRaw) / divisor;
-      
-      console.log(`💰 User balance for ${faObjectAddr}:`, {
-        raw: balanceRaw,
-        decimals: coinInfo.decimals,
-        formatted: balanceNum.toFixed(4),
-        symbol: coinInfo.symbol
-      });
-      
-      return balanceNum;
-    } catch (error) {
-      console.warn(`Could not get user balance for ${faObjectAddr}:`, error);
+  const getUserTokenBalance = useCallback(async (tokenAddress: string) => {
+    if (!account?.address) {
+      console.warn("No account address available for balance check");
       return 0;
     }
-  };
+    
+    try {
+      // CRITICAL: Convert account.address to string (it's an object/Uint8Array)
+      const userAddress = account.address.toString();
+      
+      console.log("🔍 Fetching balance:", {
+        userAddress: userAddress,
+        tokenAddress: tokenAddress,
+        accountAddressType: typeof account.address,
+        userAddressStringType: typeof userAddress
+      });
+      
+      // Use the same API method as portfolio page
+      const balanceRaw = await getBalanceFromAPI(userAddress, tokenAddress);
+      const balance = Number(balanceRaw) || 0;
+      
+      console.log(`✅ Balance result for ${tokenAddress}:`, {
+        raw: balanceRaw,
+        parsed: balance,
+        inTokens: balance / 100000000
+      });
+      
+      return balance;
+    } catch (error) {
+      console.error("❌ Error getting user token balance:", error);
+      return 0;
+    }
+  }, [account?.address, getBalanceFromAPI]);
 
   // Function to fetch all bonding curve pools from API
   const fetchBondingCurvePools = async () => {
@@ -538,7 +623,8 @@ export default function CoinDetailPage() {
             total_volume: totalVolume,
             trade_count: tradeCount,
             icon_uri: token.icon_uri || "",
-            project_uri: token.project_uri || ""
+            project_uri: token.project_uri || "",
+            dex_pool_addr: token.pool_stats?.dex_pool_addr || null
           } as TokenInfo;
 
         } catch (error) {
@@ -588,6 +674,35 @@ export default function CoinDetailPage() {
     }
   }, [account?.address]);
 
+  // Update user token balance whenever selectedToken changes or wallet connects
+  useEffect(() => {
+    const updateUserBalance = async () => {
+      console.log('🔄 useEffect triggered - Update balance', {
+        hasSelectedToken: !!selectedToken,
+        hasAccount: !!account?.address,
+        tokenAddress: selectedToken?.fa_object_addr,
+        tokenSymbol: selectedToken?.symbol,
+        accountAddress: account?.address
+      });
+
+      if (selectedToken?.fa_object_addr && account?.address) {
+        console.log('🔄 Updating user token balance for:', selectedToken.symbol);
+        const balance = await getUserTokenBalance(selectedToken.fa_object_addr);
+        setUserTokenBalance(balance);
+        console.log('✅ User balance state updated:', {
+          balance,
+          balanceInTokens: balance / 100000000,
+          symbol: selectedToken.symbol
+        });
+      } else {
+        console.log('⚠️ Cannot update balance - missing selectedToken or account');
+        setUserTokenBalance(0);
+      }
+    };
+
+    updateUserBalance();
+  }, [selectedToken?.fa_object_addr, account?.address, getUserTokenBalance]);
+
   // Bonding curve calculation (XYK formula)
   const calculateTokensOut = (aptIn: number, aptReserves: number, tokenSupply: number): number => {
     const x = aptReserves + VIRTUAL_APT_RESERVES;
@@ -630,8 +745,26 @@ export default function CoinDetailPage() {
           name: data.data.name,
           trades: data.data.trades?.length || 0,
           volume_24h: data.data.volume_24h,
-          trade_count_24h: data.data.trade_count_24h
+          trade_count_24h: data.data.trade_count_24h,
+          pool_stats: data.data.pool_stats
         });
+        
+        // Debug graduation progress calculation
+        if (data.data.pool_stats) {
+          const aptReserves = Number(data.data.pool_stats.apt_reserves);
+          const threshold = Number(data.data.pool_stats.graduation_threshold);
+          const progress = (aptReserves / threshold) * 100;
+          
+          console.log(`📈 Graduation Progress Calculation:`, {
+            apt_reserves_octas: aptReserves,
+            apt_reserves_apt: (aptReserves / 1e8).toFixed(2) + ' APT',
+            graduation_threshold_octas: threshold,
+            graduation_threshold_apt: (threshold / 1e8).toFixed(0) + ' APT',
+            progress_percentage: progress.toFixed(2) + '%',
+            is_graduated: data.data.pool_stats.is_graduated
+          });
+        }
+        
         setToken(data.data);
       } else {
         setError(data.error || "Failed to fetch token details");
@@ -824,15 +957,65 @@ export default function CoinDetailPage() {
       setAptAmount("");
       setTokenAmount("");
 
+      // Refresh balance immediately
+      if (selectedToken) {
+        const newBalance = await getUserTokenBalance(selectedToken.fa_object_addr);
+        setUserTokenBalance(newBalance);
+        console.log('💰 Balance refreshed after buy:', newBalance / 100000000, selectedToken.symbol);
+      }
+
       setTimeout(() => {
         fetchBondingCurvePools();
       }, 2000);
 
     } catch (error: any) {
+      // Convert error to string for comprehensive checking
+      const errorString = String(error);
+      const errorMessage = error?.message || errorString;
+      
+      // Check if user rejected the transaction (not an actual error)
+      const isUserRejection = 
+        errorMessage.includes("User rejected") || 
+        errorMessage.includes("User has rejected") ||
+        errorMessage.includes("rejected the request") ||
+        errorString.includes("User rejected") ||
+        errorString.includes("User has rejected") ||
+        errorString.includes("rejected the request") ||
+        errorMessage.includes("cancelled") ||
+        errorMessage.includes("denied") ||
+        error?.code === 4001 ||
+        error?.code === "USER_REJECTED";
+
+      if (isUserRejection) {
+        // User cancelled - just log info, not an error
+        console.info("Buy transaction cancelled by user");
+        toast.info("Transaction cancelled", {
+          description: "You cancelled the transaction. No tokens were purchased.",
+          duration: 4000
+        });
+        return; // Exit early, no need to log as error
+      }
+
+      // Actual errors - log them
       console.error("Buy error:", error);
-      toast.error("Purchase failed", {
-        description: error?.message || "Transaction failed"
-      });
+
+      // Handle specific error cases
+      if (errorMessage.includes("Insufficient")) {
+        toast.error("Insufficient balance", {
+          description: "You don't have enough APT for this transaction.",
+          duration: 5000
+        });
+      } else if (errorMessage.includes("network") || errorMessage.includes("timeout")) {
+        toast.error("Network error", {
+          description: "Please check your internet connection and try again.",
+          duration: 5000
+        });
+      } else {
+        toast.error("Purchase failed", {
+          description: errorMessage || "Transaction failed. Please try again.",
+          duration: 5000
+        });
+      }
     } finally {
     }
   };
@@ -848,21 +1031,354 @@ export default function CoinDetailPage() {
       return;
     }
 
-    if (!selectedToken.user_balance || selectedToken.user_balance < Number(tokenAmount)) {
-      toast.error("Insufficient token balance");
+    // Validate token amount input
+    const tokenAmountNum = Number(tokenAmount);
+    if (isNaN(tokenAmountNum) || tokenAmountNum <= 0) {
+      toast.error("Invalid amount", {
+        description: "Please enter a valid token amount"
+      });
+      return;
+    }
+
+    // Use the real-time balance from state
+    const currentBalanceInTokens = userTokenBalance / 100000000;
+    
+    console.log("📊 Balance check before sell:", {
+      tokenAddress: selectedToken.fa_object_addr,
+      tokenSymbol: selectedToken.symbol,
+      userBalanceOctas: userTokenBalance,
+      userBalanceTokens: currentBalanceInTokens,
+      tokenAmountRequested: tokenAmountNum,
+      hasEnoughBalance: currentBalanceInTokens >= tokenAmountNum
+    });
+    
+    // Check if user has any balance at all
+    if (userTokenBalance === 0) {
+      toast.error("No token balance", {
+        description: `You don't have any ${selectedToken.symbol} tokens to sell. Buy some first!`
+      });
+      return;
+    }
+
+    // Check if user has enough balance
+    if (currentBalanceInTokens < tokenAmountNum) {
+      toast.error("Insufficient token balance", {
+        description: `You have ${currentBalanceInTokens.toFixed(6)} ${selectedToken.symbol}, but trying to sell ${tokenAmountNum.toFixed(6)}`
+      });
       return;
     }
 
     try {
-      toast.info("Sell functionality not available", {
-        description: "The current bonding curve only supports buying. Selling would need to be added to the smart contract."
+      const tokensInOctas = Math.floor(tokenAmountNum * 100000000);
+
+      console.log(`💰 Selling ${selectedToken.symbol}:`, {
+        tokenAmount: `${tokenAmountNum} ${selectedToken.symbol}`,
+        octas: tokensInOctas,
+        token: selectedToken.name,
+        address: selectedToken.fa_object_addr
       });
 
-    } catch (error: any) {
-      console.error("Sell error:", error);
-      toast.error("Sale failed", {
-        description: error?.message || "Transaction failed"
+      const transaction = await signAndSubmitTransaction({
+        sender: account.address,
+        data: {
+          function: `${MODULE_ADDR}::bonding_curve_pool::sell_tokens`,
+          typeArguments: [],
+          functionArguments: [
+            selectedToken.fa_object_addr,
+            tokensInOctas.toString()
+          ],
+        },
       });
+
+      const txHash = transaction.hash;
+      console.log("Sell transaction submitted:", txHash);
+
+      toast.success("🎉 Sale successful!", {
+        description: `Sold ${tokenAmountNum.toFixed(6)} ${selectedToken.symbol} for ~${estimatedApt.toFixed(6)} APT`,
+        duration: 5000
+      });
+
+      setTokenAmount("");
+      setAptAmount("");
+
+      // Refresh balance immediately
+      if (selectedToken) {
+        const newBalance = await getUserTokenBalance(selectedToken.fa_object_addr);
+        setUserTokenBalance(newBalance);
+        console.log('💰 Balance refreshed after sell:', newBalance / 100000000, selectedToken.symbol);
+      }
+
+      setTimeout(() => {
+        fetchBondingCurvePools();
+      }, 2000);
+
+    } catch (error: any) {
+      // Convert error to string for comprehensive checking
+      const errorString = String(error);
+      const errorMessage = error?.message || errorString;
+      
+      // Check if user rejected the transaction (not an actual error)
+      const isUserRejection = 
+        errorMessage.includes("User rejected") || 
+        errorMessage.includes("User has rejected") ||
+        errorMessage.includes("rejected the request") ||
+        errorString.includes("User rejected") ||
+        errorString.includes("User has rejected") ||
+        errorString.includes("rejected the request") ||
+        errorMessage.includes("cancelled") ||
+        errorMessage.includes("denied") ||
+        error?.code === 4001 ||
+        error?.code === "USER_REJECTED";
+
+      if (isUserRejection) {
+        // User cancelled - just log info, not an error
+        console.info("Sell transaction cancelled by user");
+        toast.info("Transaction cancelled", {
+          description: "You cancelled the transaction. No tokens were sold.",
+          duration: 4000
+        });
+        return; // Exit early, no need to log as error
+      }
+
+      // Actual errors - log them
+      console.error("Sell error:", error);
+
+      // Handle specific error cases
+      if (errorMessage.includes("Insufficient")) {
+        toast.error("Insufficient balance", {
+          description: "You don't have enough tokens for this transaction.",
+          duration: 5000
+        });
+      } else if (errorMessage.includes("network") || errorMessage.includes("timeout")) {
+        toast.error("Network error", {
+          description: "Please check your internet connection and try again.",
+          duration: 5000
+        });
+      } else {
+        toast.error("Sale failed", {
+          description: errorMessage || "Transaction failed. Please try again.",
+          duration: 5000
+        });
+      }
+    }
+  };
+
+  // DEX Trading handlers for graduated tokens
+  const handleDEXSwapBuy = async () => {
+    if (!account || !selectedToken || !aptAmount) {
+      toast.error("Please connect wallet and enter APT amount");
+      return;
+    }
+
+    try {
+      const aptInOctas = Math.floor(Number(aptAmount) * 100000000);
+
+      // Validate DEX pool address
+      if (!selectedToken.dex_pool_addr) {
+        toast.error("DEX pool address not found", {
+          description: "This token hasn't been migrated to DEX yet.",
+          duration: 5000
+        });
+        return;
+      }
+
+      console.log(`🔄 DEX Swap: ${aptAmount} APT → ${selectedToken.symbol}`, {
+        aptAmount: `${aptAmount} APT`,
+        octas: aptInOctas,
+        token: selectedToken.name,
+        poolAddress: selectedToken.dex_pool_addr
+      });
+
+      // Execute ArgoPump router swap when graduated or in test mode
+      if (testGraduatedMode || selectedToken.is_graduated) {
+        const poolAddr = selectedToken.dex_pool_addr;
+        const minOut = Math.floor(estimatedTokens * 0.95 * 100000000);
+        const encoded = encodeRouterSwapArgs(
+          poolAddr,
+          0, // APT in
+          1, // Token out
+          BigInt(aptInOctas),
+          BigInt(minOut)
+        );
+
+        const transaction = await signAndSubmitTransaction({
+          sender: account.address,
+          data: {
+            function: `${ROUTER_ADDR}::router::swap`,
+            typeArguments: [],
+            functionArguments: [encoded],
+          },
+        });
+
+        const txHash = transaction.hash;
+        toast.success("DEX Buy executed", {
+          description: (
+            <a 
+              href={`https://explorer.aptoslabs.com/txn/${txHash}?network=testnet`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              View on Explorer: {txHash.substring(0, 12)}...
+            </a>
+          ),
+          duration: 7000
+        });
+
+        setAptAmount("");
+        setTokenAmount("");
+        setTimeout(() => {
+          fetchBondingCurvePools();
+        }, 1500);
+      } else {
+        toast.info("🎓 DEX Trading Available", {
+          description: `Token has graduated! DEX pools are being set up for ${selectedToken.symbol}`,
+          duration: 5000
+        });
+      }
+
+    } catch (error: any) {
+      // Handle different types of errors
+      if (error?.message?.includes("User rejected") || 
+          error?.message?.includes("rejected") ||
+          error?.message?.includes("User has rejected") ||
+          error?.message?.includes("cancelled") ||
+          error?.message?.includes("denied") ||
+          error?.code === 4001 ||
+          error?.code === "USER_REJECTED") {
+        // Don't log user rejections
+        toast.warning("Transaction cancelled", {
+          description: "You cancelled the transaction in your wallet.",
+          duration: 4000
+        });
+      } else if (error?.message?.includes("Insufficient")) {
+        console.error("DEX Swap Buy error:", error);
+        toast.error("Insufficient balance", {
+          description: "You don't have enough APT for this transaction.",
+          duration: 5000
+        });
+      } else if (error?.message?.includes("Network")) {
+        console.error("DEX Swap Buy error:", error);
+        toast.error("Network error", {
+          description: "Please check your internet connection and try again.",
+          duration: 5000
+        });
+      } else {
+        console.error("DEX Swap Buy error:", error);
+        toast.error("DEX Swap failed", {
+          description: error?.message || "Transaction failed. Please try again.",
+          duration: 5000
+        });
+      }
+    }
+  };
+
+  const handleDEXSwapSell = async () => {
+    if (!account || !selectedToken || !tokenAmount) {
+      toast.error("Please connect wallet and enter token amount");
+      return;
+    }
+
+    try {
+      const tokensInOctas = Math.floor(Number(tokenAmount) * 100000000);
+
+      // Validate DEX pool address
+      if (!selectedToken.dex_pool_addr) {
+        toast.error("DEX pool address not found", {
+          description: "This token hasn't been migrated to DEX yet.",
+          duration: 5000
+        });
+        return;
+      }
+
+      console.log(`🔄 DEX Swap: ${tokenAmount} ${selectedToken.symbol} → APT`, {
+        tokenAmount: `${tokenAmount} ${selectedToken.symbol}`,
+        octas: tokensInOctas,
+        poolAddress: selectedToken.dex_pool_addr
+      });
+
+      // Execute ArgoPump router swap when graduated or in test mode
+      if (testGraduatedMode || selectedToken.is_graduated) {
+        const poolAddr = selectedToken.dex_pool_addr;
+        const minOut = Math.floor(estimatedApt * 0.95 * 100000000);
+        const tokensInOctas = Math.floor(Number(tokenAmount) * 100000000);
+        const encoded = encodeRouterSwapArgs(
+          poolAddr,
+          1, // Token in
+          0, // APT out
+          BigInt(tokensInOctas),
+          BigInt(minOut)
+        );
+
+        const transaction = await signAndSubmitTransaction({
+          sender: account.address,
+          data: {
+            function: `${ROUTER_ADDR}::router::swap`,
+            typeArguments: [],
+            functionArguments: [encoded],
+          },
+        });
+
+        const txHash = transaction.hash;
+        toast.success("DEX Sell executed", {
+          description: (
+            <a 
+              href={`https://explorer.aptoslabs.com/txn/${txHash}?network=testnet`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 hover:text-blue-300 underline"
+            >
+              View on Explorer: {txHash.substring(0, 12)}...
+            </a>
+          ),
+          duration: 7000
+        });
+
+        setTokenAmount("");
+        setAptAmount("");
+        setTimeout(() => {
+          fetchBondingCurvePools();
+        }, 1500);
+      } else {
+        toast.info("🎓 DEX Trading Available", {
+          description: `Token has graduated! DEX pools are being set up for ${selectedToken.symbol}`,
+          duration: 5000
+        });
+      }
+
+    } catch (error: any) {
+      // Handle different types of errors for sell
+      if (error?.message?.includes("User rejected") || 
+          error?.message?.includes("rejected") ||
+          error?.message?.includes("User has rejected") ||
+          error?.message?.includes("cancelled") ||
+          error?.message?.includes("denied") ||
+          error?.code === 4001 ||
+          error?.code === "USER_REJECTED") {
+        // Don't log user rejections
+        toast.warning("Transaction cancelled", {
+          description: "You cancelled the transaction in your wallet.",
+          duration: 4000
+        });
+      } else if (error?.message?.includes("Insufficient")) {
+        console.error("DEX Swap Sell error:", error);
+        toast.error("Insufficient balance", {
+          description: "You don't have enough tokens for this transaction.",
+          duration: 5000
+        });
+      } else if (error?.message?.includes("Network")) {
+        console.error("DEX Swap Sell error:", error);
+        toast.error("Network error", {
+          description: "Please check your internet connection and try again.",
+          duration: 5000
+        });
+      } else {
+        console.error("DEX Swap Sell error:", error);
+        toast.error("DEX Swap failed", {
+          description: error?.message || "Transaction failed. Please try again.",
+          duration: 5000
+        });
+      }
     }
   };
 
@@ -1114,8 +1630,8 @@ export default function CoinDetailPage() {
 
           <EnhancedStatsCard
             title="24h Volume"
-            value={formatNumber(token.volume_24h)}
-            subtitle="APT traded"
+            value={`${formatCompactNumber(token.volume_24h / 1e8, 2)} APT`}
+            subtitle="traded"
             icon={<BarChart3 className="w-5 h-5 text-white" />}
             gradient="bg-gradient-to-br from-blue-500/10 via-cyan-500/15 to-blue-600/10 border-blue-500/30"
             delay={0.2}
@@ -1123,7 +1639,7 @@ export default function CoinDetailPage() {
 
           <EnhancedStatsCard
             title="Total Trades"
-            value={formatNumber(token.pool_stats?.trade_count || 0)}
+            value={formatCompactNumber(token.pool_stats?.trade_count || 0, 0)}
             subtitle="transactions"
             icon={<Activity className="w-5 h-5 text-white" />}
             gradient="bg-gradient-to-br from-purple-500/10 via-pink-500/15 to-purple-600/10 border-purple-500/30"
@@ -1219,12 +1735,12 @@ export default function CoinDetailPage() {
                       {[
                         {
                           label: "APT Reserves",
-                          value: `${formatNumber(Number(token.pool_stats?.apt_reserves || 0) / 1e8)} APT`,
+                          value: `${formatCompactNumber(Number(token.pool_stats?.apt_reserves || 0) / 1e8, 2)} APT`,
                           icon: "💰"
                         },
                         {
                           label: "Total Volume",
-                          value: `${formatNumber(token.pool_stats?.total_volume || 0)} APT`,
+                          value: `${formatCompactNumber(Number(token.pool_stats?.total_volume || 0) / 1e8, 2)} APT`,
                           icon: "📊"
                         },
                         {
@@ -1330,11 +1846,11 @@ export default function CoinDetailPage() {
                             {/* Token Stats */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                               <div className="text-center p-3 rounded-lg bg-muted/20">
-                                <p className="text-2xl font-bold text-primary">{formatNumber(selectedToken?.apt_reserves || 0)}</p>
+                                <p className="text-2xl font-bold text-primary">{formatCompactNumber(selectedToken?.apt_reserves || 0, 2)}</p>
                                 <p className="text-sm text-muted-foreground">APT Reserves</p>
                               </div>
                               <div className="text-center p-3 rounded-lg bg-muted/20">
-                                <p className="text-2xl font-bold text-secondary">{formatNumber(selectedToken?.token_supply || 0)}</p>
+                                <p className="text-2xl font-bold text-secondary">{formatCompactNumber(selectedToken?.token_supply || 0, 0)}</p>
                                 <p className="text-sm text-muted-foreground">Pool Supply</p>
                               </div>
                               <div className="text-center p-3 rounded-lg bg-muted/20">
@@ -1343,7 +1859,7 @@ export default function CoinDetailPage() {
                               </div>
                               <div className="text-center p-3 rounded-lg bg-muted/20">
                                 <p className="text-2xl font-bold text-green-500">
-                                  {formatNumber(selectedToken?.user_balance || 0)}
+                                  {formatCompactNumber(userTokenBalance / 100000000, 2)}
                                 </p>
                                 <p className="text-sm text-muted-foreground">Your Balance</p>
                               </div>
@@ -1353,7 +1869,7 @@ export default function CoinDetailPage() {
                             <div className="mb-6">
                               <div className="flex justify-between text-sm mb-2">
                                 <span>Progress to DEX Graduation</span>
-                                <span>{GRADUATION_THRESHOLD.toLocaleString()} APT Target</span>
+                                <span>{formatCompactNumber(GRADUATION_THRESHOLD, 1)} APT Target</span>
                               </div>
                               <Progress value={graduationProgress} className="h-3" />
                               <p className="text-xs text-muted-foreground flex items-center gap-1 mt-2">
@@ -1362,7 +1878,30 @@ export default function CoinDetailPage() {
                               </p>
                             </div>
 
-                            {/* Trading Interface */}
+                            {/* 🧪 TEST MODE: Toggle Graduated Status */}
+                            <div className="mb-4 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                              <div className="flex items-center justify-between">
+                                <span className="text-yellow-400 text-sm font-medium">
+                                  🧪 Test Mode: Graduated Token
+                                </span>
+                                <Button
+                                  onClick={() => setTestGraduatedMode(!testGraduatedMode)}
+                                  size="sm"
+                                  variant={testGraduatedMode ? "destructive" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {testGraduatedMode ? "Disable Test" : "Enable Test"}
+                                </Button>
+                              </div>
+                              {testGraduatedMode && (
+                                <p className="text-yellow-300/80 text-xs mt-2">
+                                  Token is now treated as graduated for testing DEX interface
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Trading Interface - Hide when graduated */}
+                            {!selectedToken?.is_graduated && !testGraduatedMode && (
                             <Tabs value={activeTab} onValueChange={setActiveTab}>
                               <TabsList className="grid w-full grid-cols-2 bg-muted/20">
                                 <TabsTrigger value="buy" className="flex items-center gap-2">
@@ -1460,17 +1999,142 @@ export default function CoinDetailPage() {
                                 </div>
                               </TabsContent>
                             </Tabs>
+                            )}
 
-                            {selectedToken?.is_graduated && (
-                              <div className="p-4 rounded-lg bg-secondary/20 border border-secondary/30 mt-6">
-                                <div className="flex items-center gap-2 text-secondary mb-2">
-                                  <Target className="w-5 h-5" />
-                                  <span className="font-semibold">Token Graduated!</span>
+                            {(selectedToken?.is_graduated || testGraduatedMode) && (
+                              <div className="p-6 rounded-lg bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/30 mt-6">
+                                <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-2 text-green-400">
+                                    <Target className="w-5 h-5" />
+                                    <span className="font-semibold">🎓 Graduated Token - DEX Trading</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground">Powered by</span>
+                                    <motion.a
+                                      href="https://tapp.exchange"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 hover:opacity-80 transition-opacity"
+                                      whileHover={{ scale: 1.05 }}
+                                      whileTap={{ scale: 0.95 }}
+                                    >
+                                      <img 
+                                        src="https://tapp.exchange/main-icon.png" 
+                                        alt="Tapp Exchange" 
+                                        className="h-5 w-5 object-contain"
+                                      />
+                                      <img 
+                                        src="https://tapp.exchange/main-word.png" 
+                                        alt="Tapp Exchange" 
+                                        className="h-4 object-contain"
+                                      />
+                                    </motion.a>
+                                  </div>
                                 </div>
-                                <p className="text-sm text-muted-foreground">
-                                  This token has reached the graduation threshold and is now available on DEX.
-                                  Trading on the bonding curve is no longer available.
+                                <p className="text-sm text-muted-foreground mb-4">
+                                  {testGraduatedMode ? (
+                                    <>🧪 <strong>Test Mode:</strong> Simulating graduated token DEX interface. This token hasn't actually graduated yet.</>
+                                  ) : (
+                                    "This token has graduated to a DEX pool. Trade using advanced liquidity pools."
+                                  )}
                                 </p>
+                                
+                                {/* DEX Trading Interface */}
+                                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                                  <TabsList className="grid w-full grid-cols-2 bg-muted/20">
+                                    <TabsTrigger value="buy" className="flex items-center gap-2">
+                                      <TrendingUp className="w-4 h-4" />
+                                      Swap to {selectedToken?.symbol}
+                                    </TabsTrigger>
+                                    <TabsTrigger value="sell" className="flex items-center gap-2">
+                                      <TrendingDown className="w-4 h-4" />
+                                      Swap from {selectedToken?.symbol}
+                                    </TabsTrigger>
+                                  </TabsList>
+
+                                  <TabsContent value="buy" className="space-y-4 mt-6">
+                                    <div className="space-y-4">
+                                      <div>
+                                        <Label htmlFor="apt-amount-dex">APT Amount</Label>
+                                        <Input
+                                          id="apt-amount-dex"
+                                          type="number"
+                                          placeholder="0.0"
+                                          value={aptAmount}
+                                          onChange={(e) => setAptAmount(e.target.value)}
+                                          className="bg-muted/20"
+                                        />
+                                      </div>
+
+                                      <div className="flex items-center justify-center">
+                                        <ArrowUpDown className="w-5 h-5 text-muted-foreground" />
+                                      </div>
+
+                                      <div>
+                                        <Label htmlFor="token-estimate-dex">You'll receive (estimated)</Label>
+                                        <Input
+                                          id="token-estimate-dex"
+                                          value={estimatedTokens.toFixed(6)}
+                                          readOnly
+                                          className="bg-muted/10"
+                                        />
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          {selectedToken?.symbol} tokens (via DEX)
+                                        </p>
+                                      </div>
+
+                                      <Button
+                                        onClick={handleDEXSwapBuy}
+                                        disabled={!aptAmount || !account}
+                                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 border-0"
+                                      >
+                                        {`Swap APT → ${selectedToken?.symbol}`}
+                                      </Button>
+                                    </div>
+                                  </TabsContent>
+
+                                  <TabsContent value="sell" className="space-y-4 mt-6">
+                                    <div className="space-y-4">
+                                      <div>
+                                        <Label htmlFor="token-amount-dex">Token Amount</Label>
+                                        <Input
+                                          id="token-amount-dex"
+                                          type="number"
+                                          placeholder="0.0"
+                                          value={tokenAmount}
+                                          onChange={(e) => setTokenAmount(e.target.value)}
+                                          className="bg-muted/20"
+                                        />
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                          {selectedToken?.symbol} tokens to swap
+                                        </p>
+                                      </div>
+
+                                      <div className="flex items-center justify-center">
+                                        <ArrowUpDown className="w-5 h-5 text-muted-foreground" />
+                                      </div>
+
+                                      <div>
+                                        <Label htmlFor="apt-estimate-dex">You'll receive (estimated)</Label>
+                                        <Input
+                                          id="apt-estimate-dex"
+                                          value={estimatedApt.toFixed(6)}
+                                          readOnly
+                                          className="bg-muted/10"
+                                        />
+                                        <p className="text-xs text-muted-foreground mt-1">APT (via DEX)</p>
+                                      </div>
+
+                                      <Button
+                                        onClick={handleDEXSwapSell}
+                                        disabled={!tokenAmount || !account}
+                                        className="w-full bg-gradient-to-r from-orange-500 to-red-500 border-0"
+                                      >
+                                        {`Swap ${selectedToken?.symbol} → APT`}
+                                      </Button>
+                                    </div>
+                                  </TabsContent>
+                                </Tabs>
                               </div>
                             )}
                           </div>
@@ -1511,7 +2175,7 @@ export default function CoinDetailPage() {
                   <CardContent className="relative z-10">
                     <div className="space-y-4">
                       {token.trades.length > 0 ? (
-                        token.trades.map((trade, index) => (
+                        token.trades.map((trade: any, index: number) => (
                           <motion.div
                             key={trade.id}
                             initial={{ x: -50, opacity: 0 }}
@@ -1543,7 +2207,7 @@ export default function CoinDetailPage() {
                               </motion.div>
                               <div>
                                 <p className="text-white font-bold text-lg">
-                                  {formatNumber(trade.token_amount)} {token.symbol}
+                                  {formatCompactNumber(Number(trade.token_amount) / 1e8, 2)} {token.symbol}
                                 </p>
                                 <motion.p
                                   className="text-white/60 text-sm font-mono"
@@ -1559,7 +2223,7 @@ export default function CoinDetailPage() {
                                 animate={{ scale: [1, 1.02, 1] }}
                                 transition={{ duration: 3, repeat: Infinity, delay: index * 0.2 }}
                               >
-                                {formatNumber(trade.apt_amount)} APT
+                                {formatCompactNumber(Number(trade.apt_amount) / 1e8, 2)} APT
                               </motion.p>
                               <p className="text-white/60 text-sm">
                                 {new Date(trade.created_at).toLocaleString()}
@@ -1627,7 +2291,7 @@ export default function CoinDetailPage() {
                         { label: "Creator", value: formatAddress(token.creator), icon: "👤" },
                         { label: "Decimals", value: token.decimals.toString(), icon: "🔢" },
                         { label: "Created", value: new Date(token.created_at).toLocaleDateString(), icon: "📅" },
-                        { label: "Max Supply", value: token.max_supply ? formatNumber(token.max_supply) : "1B", icon: "💰" }
+                        { label: "Max Supply", value: token.max_supply ? formatCompactNumber(Number(token.max_supply) / 1e8, 0) : "1B", icon: "💰" }
                       ].map((info, index) => (
                         <motion.div
                           key={info.label}
@@ -1683,9 +2347,9 @@ export default function CoinDetailPage() {
                       </h4>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                         {[
-                          { label: "24h Trades", value: token.trade_count_24h.toString() },
+                          { label: "24h Trades", value: formatCompactNumber(token.trade_count_24h, 0) },
                           { label: "Status", value: token.pool_stats?.is_graduated ? "Graduated" : "Bonding" },
-                          { label: "Total Volume", value: formatNumber(token.pool_stats?.total_volume || 0) },
+                          { label: "Total Volume", value: `${formatCompactNumber(Number(token.pool_stats?.total_volume || 0) / 1e8, 2)} APT` },
                           { label: "Mint Fee", value: `${token.mint_fee_per_unit} APT` }
                         ].map((stat, index) => (
                           <motion.div
@@ -1733,3 +2397,5 @@ export default function CoinDetailPage() {
     </div>
   );
 }
+
+

@@ -194,30 +194,48 @@ export default function LaunchTokenForm() {
       setIconUri("");
       setProjectUri("");
     } catch (e: any) {
+      // Convert error to string for comprehensive checking
+      const errorString = String(e);
+      const errorMessage = e?.message || errorString;
+      
+      // Check if user rejected the transaction (not an actual error)
+      const isUserRejection = 
+        errorMessage.includes("User rejected") || 
+        errorMessage.includes("User has rejected") ||
+        errorMessage.includes("rejected the request") ||
+        errorString.includes("User rejected") ||
+        errorString.includes("User has rejected") ||
+        errorString.includes("rejected the request") ||
+        errorMessage.includes("cancelled") ||
+        errorMessage.includes("denied") ||
+        e?.code === 4001 || // Standard rejection code
+        e?.code === "USER_REJECTED";
+
+      if (isUserRejection) {
+        // User cancelled - just log info, not an error
+        console.info("Transaction cancelled by user");
+        toast.info("Transaction cancelled", { 
+          description: "You cancelled the transaction. No tokens were created." 
+        });
+        return; // Exit early, no need to log as error
+      }
+      
+      // Actual errors - log them
       console.error("Deployment error:", e);
       
       // Handle specific error cases
-      let errorMessage = "Failed to create token";
-      let errorDescription = e?.message || String(e);
+      let toastMessage = "Failed to create token";
+      let toastDescription = errorMessage;
       
-      // Check for user rejection
-      if (e?.message?.includes("User rejected") || 
-          e?.message?.includes("rejected") ||
-          e?.message?.includes("cancelled") ||
-          e?.message?.includes("denied") ||
-          e?.code === 4001 || // Standard rejection code
-          e?.code === "USER_REJECTED") {
-        errorMessage = "Transaction cancelled";
-        errorDescription = "You cancelled the transaction. No tokens were created.";
-      } else if (e?.message?.includes("insufficient")) {
-        errorMessage = "Insufficient balance";
-        errorDescription = "You don't have enough APT to complete this transaction.";
-      } else if (e?.message?.includes("network") || e?.message?.includes("timeout")) {
-        errorMessage = "Network error";
-        errorDescription = "Please check your connection and try again.";
+      if (errorMessage.includes("insufficient")) {
+        toastMessage = "Insufficient balance";
+        toastDescription = "You don't have enough APT to complete this transaction.";
+      } else if (errorMessage.includes("network") || errorMessage.includes("timeout")) {
+        toastMessage = "Network error";
+        toastDescription = "Please check your connection and try again.";
       }
       
-      toast.error(errorMessage, { description: errorDescription });
+      toast.error(toastMessage, { description: toastDescription });
     } finally {
       setSubmitting(false);
     }

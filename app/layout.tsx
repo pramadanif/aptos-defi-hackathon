@@ -5,6 +5,9 @@ import { ThemeProvider } from "../components/ThemeProvider";
 import AptosWalletProvider from "../components/wallet/AptosWalletProvider";
 // import BackgroundLiquidChrome from "../components/BackgroundLiquidChrome";
 
+// Auto-start real-time indexer on server startup
+import '@/lib/indexer-autostart';
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

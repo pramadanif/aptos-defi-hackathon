@@ -8,9 +8,22 @@ import { Network } from "@aptos-labs/ts-sdk";
 
 export default function AptosWalletProvider({ children }: { children: ReactNode }) {
   const onError = (error: unknown) => {
+    // Check if it's a user rejection first
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("User has rejected") || 
+        errorMessage.includes("rejected") ||
+        errorMessage.includes("cancelled") ||
+        errorMessage.includes("denied") ||
+        (error as any)?.code === 4001 || // Standard rejection code
+        (error as any)?.code === "USER_REJECTED") {
+      // Don't log or show toast for user rejections - let the specific handlers deal with it
+      return;
+    }
+    
+    // Only log and show toast for actual errors (not rejections)
     console.error(error);
     toast.error("Wallet error", {
-      description: error instanceof Error ? error.message : String(error),
+      description: errorMessage,
     });
   };
   

@@ -8,6 +8,22 @@ import { TrendingUp, Clock, Filter, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+// Utility function for compact number formatting
+const formatCompactNumber = (value: string | number, decimals = 2) => {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (isNaN(num)) return '0';
+  
+  const absNum = Math.abs(num);
+  
+  if (absNum >= 1e9) return `${(num / 1e9).toFixed(decimals)}B`;
+  if (absNum >= 1e6) return `${(num / 1e6).toFixed(decimals)}M`;
+  if (absNum >= 1e3) return `${(num / 1e3).toFixed(decimals)}K`;
+  
+  // For numbers less than 1000, show with appropriate decimals
+  if (absNum < 1) return num.toFixed(decimals);
+  return num.toFixed(decimals < 2 ? decimals : 2);
+};
+
 // Mock data
 const mockTokens = [
   {
@@ -283,8 +299,8 @@ function TokenGrid({ tokens }: { tokens: any[] }) {
           price: currentPrice,
           change24h: 0, // Would need historical data
           volume: token?.pool_stats?.total_volume ? 
-            `$${(Number(token.pool_stats.total_volume) / 1e8).toFixed(2)}` : "$0",
-          marketCap: `$${(currentPrice * 1000000000).toFixed(2)}`, // Assuming 1B supply
+            `$${formatCompactNumber(Number(token.pool_stats.total_volume) / 1e8, 2)}` : "$0",
+          marketCap: `$${formatCompactNumber(currentPrice * 1000000000, 2)}`, // Assuming 1B supply
           creator: {
             name: token?.creator ? `${token.creator.slice(0, 6)}...${token.creator.slice(-4)}` : "BullPump",
             avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=bullpump"

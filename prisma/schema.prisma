@@ -56,6 +56,7 @@ model PoolStats {
   trade_count     Int      @default(0)
   is_graduated    Boolean  @default(false)
   graduation_threshold Decimal @default(2150000000000) // 21500 APT in octas
+  dex_pool_addr   String?  // DEX pool address after graduation (0x... 66 characters)
   
   updated_at      DateTime @updatedAt
   
