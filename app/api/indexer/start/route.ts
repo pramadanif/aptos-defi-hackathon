@@ -41,7 +41,7 @@ export async function GET() {
       }
     });
     hasRecentActivity = recentTrades > 0;
-  } catch (error) {
+  } catch {
     // Database might not be connected
   }
   

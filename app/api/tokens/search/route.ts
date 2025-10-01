@@ -106,12 +106,12 @@ export async function GET(request: NextRequest) {
       total: transformedResults.length
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Search error:", error);
     return NextResponse.json({ 
       success: false, 
       error: "Search failed",
-      details: error?.message || String(error)
+      details: error instanceof Error ? error.message : String(error)
     }, { status: 500 });
   }
 }

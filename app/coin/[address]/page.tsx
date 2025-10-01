@@ -17,13 +17,10 @@ import { Progress } from "@/components/ui/progress";
 import {
   TrendingUp,
   TrendingDown,
-  ExternalLink,
   Copy,
   Globe,
-  Users,
   Activity,
   DollarSign,
-  Clock,
   BarChart3,
   Loader2,
   ArrowLeft,
