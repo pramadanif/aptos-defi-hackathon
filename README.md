@@ -305,7 +305,7 @@ curl http://localhost:3000/api/indexer/status
 ### Contract Address
 
 ```
-Module: 0x4660906d4ed4062029a19e989e51c814aa5b0711ef0ba0433b5f7487cb03b257
+Module: 0xf937c2d4a8ed5d30141b4911593543dd5975eab3a0e6d75105783205996e516f
 Network: Aptos Testnet
 ```
 
@@ -425,7 +425,7 @@ const aptOut = (x * tokensIn) / (y + tokensIn);
 
 ### Overview
 
-ArgoPump features a **real-time blockchain indexer** that monitors Aptos blockchain with **1-second polling** and detects transactions with **1-3 second delay**.
+ArgoPump features a **real-time blockchain indexer** that monitors Aptos blockchain with **1-second polling** and detects transactions with **1-3 second delay**. Due to Vercel Limitation the demo indexer is delayed for 5 - 10 minutes.
 
 ### Key Features
 
@@ -490,7 +490,7 @@ Response:
 
 ### Graduated Token Trading
 
-When a token reaches 21,500 APT threshold, it **graduates** from bonding curve to DEX pools.
+When a token reaches 21,500 APT threshold, it **graduates** from bonding curve to DEX pools. Currently we are integrated with **TAPP Exchange** for the DEX interactions.
 
 ### DEX Swap Implementation
 
@@ -908,37 +908,7 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - **Vercel** - For seamless deployment
 - **Prisma** - For type-safe database access
 - **Radix UI** - For accessible component primitives
-
----
-
-## 📞 Support
-
-- **Documentation**: [docs/](./docs)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/argopump/issues)
-- **Discord**: [Join our community](https://discord.gg/argopump)
-- **Twitter**: [@ArgoPump](https://twitter.com/argopump)
-
----
-
-## 🗺 Roadmap
-
-### Q1 2025
-- [ ] Mainnet deployment
-- [ ] Advanced analytics dashboard
-- [ ] Token leaderboard
-- [ ] Mobile app (React Native)
-
-### Q2 2025
-- [ ] Multi-hop swaps
-- [ ] Liquidity provision UI
-- [ ] Governance token
-- [ ] DAO integration
-
-### Q3 2025
-- [ ] Cross-chain bridges
-- [ ] NFT launchpad
-- [ ] Advanced trading features
-- [ ] API v2
+- **God** - For Giving us life to make this dapp
 
 ---
 
