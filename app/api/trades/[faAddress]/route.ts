@@ -4,10 +4,10 @@ import { prisma } from '@/lib/prisma';
 // GET /api/trades/:faAddress - Trades for specific token
 export async function GET(
   request: NextRequest,
-  { params }: { params: { faAddress: string } }
+  { params }: { params: Promise<{ faAddress: string }> }
 ) {
   try {
-    const { faAddress } = params;
+    const { faAddress } = await params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
