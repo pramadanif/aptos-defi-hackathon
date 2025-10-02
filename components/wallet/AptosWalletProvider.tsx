@@ -34,7 +34,7 @@ export default function AptosWalletProvider({ children }: { children: ReactNode 
   
   // Whitelist extension wallets
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const OPT_IN_WALLETS = ["Petra", "Martian", "Martian Wallet", "OKX Wallet", "Pontem Wallet"] as unknown as any;
+  const OPT_IN_WALLETS = ["Petra", "Martian", "Martian Wallet", "Pontem Wallet"] as unknown as any;
 
   return (
     <AptosWalletAdapterProvider

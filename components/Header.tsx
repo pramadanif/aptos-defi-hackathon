@@ -191,7 +191,7 @@ export function Header() {
                     ease: "easeInOut"
                   }}
                 >
-                  ArgoPump
+                  <Link href="/" className="text-white hover:text-pink-400 transition-colors duration-300">ArgoPump</Link>
                 </motion.span>
                 
                 {/* Floating sparkles */}
