@@ -215,6 +215,7 @@ For the Indexer Details go here: [Indexer](https://github.com/pramadanif/argopum
 - **[PostgreSQL](https://www.postgresql.org/)** - Powerful relational database
 - **[pg 8.16.3](https://node-postgres.com/)** - Non-blocking PostgreSQL client
 - **[Node.js 20+](https://nodejs.org/)** - JavaScript runtime environment
+- **[Express](https://expressjs.com/)** - Web Framework
 
 ### Blockchain
 - **[Aptos SDK 5.1.0](https://github.com/aptos-labs/aptos-ts-sdk)** - Official Aptos TypeScript SDK
