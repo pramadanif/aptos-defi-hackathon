@@ -1,4 +1,4 @@
-# 🚀 ArgoPump - Bonding Curve Token Launchpad on Aptos
+<img width="1902" height="919" alt="image" src="https://github.com/user-attachments/assets/bd32d3e0-8341-4af3-be17-c84371f87742" /># 🚀 ArgoPump - Bonding Curve Token Launchpad on Aptos
 
 <div align="center">
 
@@ -19,7 +19,8 @@
 ## 📋 Table of Contents
 
 - [Overview](#-overview)
-- [Smart Contract](#-Smart-Contract)
+- [Smart Contract](#-smart-contract)
+- [Indexer](#-indexer)
 - [Key Features](#-key-features)
 - [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
@@ -52,7 +53,13 @@
 
 ## 📃 Smart Contract
 
-For the Smart Contract Details go here: [Link](https://github.com/HusseinHato/argopump)
+For the Smart Contract Details go here: [Smart Contract](https://github.com/HusseinHato/argopump)
+
+---
+
+## ⚙ Indexer
+
+For the Indexer Details go here: [Indexer](https://github.com/pramadanif/argopump-fa-indexer)
 
 ---
 
