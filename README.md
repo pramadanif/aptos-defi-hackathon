@@ -104,7 +104,11 @@ For the Smart Contract Details go here: [Link](https://github.com/HusseinHato/ar
 - **3D Effects** - Three.js powered visual effects
 - **Professional Design** - Clean, elegant interface
 
----
+### 🔄 DEX Integration (TAPP Exchange)
+- **Graduated Token Trading** – Tokens move from bonding curve to DEX at 21,500 APT  
+- **TAPP Exchange Integration** – Currently integrated for DEX interactions  
+- **Seamless Migration** – Automatic transition without user friction  
+
 
 ## 🏗 Architecture
 
