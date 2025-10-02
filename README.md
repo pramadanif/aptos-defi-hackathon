@@ -1,4 +1,4 @@
-<img width="1902" height="919" alt="image" src="https://github.com/user-attachments/assets/bd32d3e0-8341-4af3-be17-c84371f87742" /># 🚀 ArgoPump - Bonding Curve Token Launchpad on Aptos
+# 🚀 ArgoPump - Bonding Curve Token Launchpad on Aptos
 
 <div align="center">
 
