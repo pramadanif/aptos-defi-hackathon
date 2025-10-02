@@ -33,7 +33,7 @@ export function Footer() {
             <div className="flex items-center space-x-2 mb-4">
               <div className="w-8 h-8 rounded-lg overflow-hidden">
                 <Image 
-                  src="/ArgoPump.png" 
+                  src="/ARGOPUMP.png"  
                   alt="ArgoPump Logo" 
                   width={32} 
                   height={32}
