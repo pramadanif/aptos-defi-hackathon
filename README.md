@@ -227,6 +227,7 @@ For the Indexer Details go here: [Indexer](https://github.com/pramadanif/argopum
 - **[Turbopack](https://turbo.build/)** - Next.js 15 native bundler (10x faster)
 - **[ESLint 9](https://eslint.org/)** - Code linting with Next.js config
 - **[PostCSS](https://postcss.org/)** - CSS transformations
+- **[PM2](https://pm2.io/)** - Monitoring Dashboard and 24/7 Uptime
 
 ---
 
@@ -453,7 +454,7 @@ const aptOut = (x * tokensIn) / (y + tokensIn);
 
 ### Overview
 
-ArgoPump features a **real-time blockchain indexer** that monitors Aptos blockchain with **1-second polling** and detects transactions with **1-3 second delay**. Due to Vercel Limitation the demo indexer is delayed for 5 - 10 minutes.
+ArgoPump features a **real-time blockchain indexer** that monitors Aptos blockchain with **1-second polling** and detects transactions with **1-3 second delay**.
 
 ### Key Features
 
@@ -757,28 +758,14 @@ npm i -g vercel
 vercel --prod
 ```
 
-Or connect your GitHub repository in Vercel Dashboard for automatic deployments.
-
-#### 4. Setup Cron Job
-
-Create `vercel.json`:
-```json
-{
-  "crons": [{
-    "path": "/api/indexer/cron",
-    "schedule": "*/5 * * * *"
-  }]
-}
-```
-
 ### Local vs Production
 
 | Feature | Local | Production (Vercel) |
 |---------|-------|---------------------|
-| **Indexer Mode** | Real-time (1s polling) | Batch (5min cron) |
-| **Expected Delay** | 1-3 seconds | 5-10 minutes |
+| **Indexer Mode** | Real-time (1s polling) | Real-time (1s polling) |
+| **Expected Delay** | 1-3 seconds | 1-3 seconds |
 | **Database** | Local PostgreSQL | Supabase/Neon |
-| **Server** | Node.js | Serverless Functions |
+| **Server** | Node.js | Node.js |
 
 ---
 
