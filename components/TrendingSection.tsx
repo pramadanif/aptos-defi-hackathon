@@ -331,6 +331,7 @@ function TokenGrid({ tokens }: { tokens: TokenGridToken[] }) {
         
         const transformedToken = {
           id: tokenAddress,
+          address: tokenAddress, // Add this line to ensure the address is available for navigation
           name: token?.name || "Unknown Token",
           symbol: token?.symbol || "UNK",
           price: currentPrice,

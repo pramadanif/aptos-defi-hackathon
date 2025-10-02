@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "./ui/card";
 import { Progress } from "./ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
@@ -10,6 +11,7 @@ import { TrendingUp, TrendingDown, Eye, Heart, MessageCircle, ShoppingCart, BarC
 interface TokenCardProps {
   token: {
     id: string;
+    address: string;
     name: string;
     symbol: string;
     price: number;
@@ -34,7 +36,13 @@ interface TokenCardProps {
 }
 
 export function TokenCard({ token }: TokenCardProps) {
+  const router = useRouter();
   const isPositive = token.change24h > 0;
+  
+  const handleBuyNow = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    router.push(`/coin/${token.address}`);
+  };
   
   return (
     <motion.div
@@ -272,6 +280,7 @@ export function TokenCard({ token }: TokenCardProps) {
               className="flex-1"
             >
               <motion.button 
+                onClick={handleBuyNow}
                 whileHover={{ 
                   y: -3,
                   rotateY: 5,

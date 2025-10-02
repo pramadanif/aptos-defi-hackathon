@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -2373,6 +2374,7 @@ export default function CoinDetailPage() {
           </Tabs>
         </motion.div>
       </div>
+      <Footer />
 
       {/* Custom CSS for elegant marquee animation */}
       <style jsx>{`
