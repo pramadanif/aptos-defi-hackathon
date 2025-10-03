@@ -232,9 +232,9 @@ export default function PortfolioPage() {
         "0x1::aptos_coin::AptosCoin", // APT
       ];
 
-      // Get BullPump tokens from Prisma database
+      // Get ArgoPump tokens from Prisma database
       try {
-        console.log("Fetching BullPump tokens from database...");
+        console.log("Fetching ArgoPump tokens from database...");
         
         const tokensResponse = await fetch('/api/tokens');
         const tokensData = await tokensResponse.json();
@@ -242,10 +242,10 @@ export default function PortfolioPage() {
         if (tokensData.success && Array.isArray(tokensData.data)) {
           const bullPumpTokens = tokensData.data.map((token: any) => token.address);
           knownAssets.push(...bullPumpTokens);
-          console.log("Added BullPump tokens from database:", bullPumpTokens);
+          console.log("Added ArgoPump tokens from database:", bullPumpTokens);
         }
       } catch (dbError) {
-        console.warn("Could not fetch BullPump tokens from database:", dbError);
+        console.warn("Could not fetch ArgoPump tokens from database:", dbError);
       }
 
       // Also check account resources for other coins
@@ -293,7 +293,7 @@ export default function PortfolioPage() {
           const amount = Number(balanceRaw) / Math.pow(10, coinInfo.decimals);
           const valueUSD = amount * priceData.price;
 
-          // Get additional metadata for BullPump tokens from database
+          // Get additional metadata for ArgoPump tokens from database
           let iconUri = "";
           let projectUri = "";
           let currentPrice = priceData.price;
@@ -558,7 +558,7 @@ export default function PortfolioPage() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-blue-300 mb-1">BullPump Tokens</p>
+                        <p className="text-sm text-blue-300 mb-1">ArgoPump Tokens</p>
                         <p className="text-2xl font-bold text-white">{otherAssets.length}</p>
                       </div>
                       <div className="p-3 rounded-full bg-blue-500/20">
@@ -639,7 +639,7 @@ export default function PortfolioPage() {
               )}
 
 
-              {/* BullPump Tokens */}
+              {/* ArgoPump Tokens */}
               {otherAssets.length > 0 && (
                 <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, delay: 0.15 }}>
                   <Card className="liquid-glass bg-gradient-to-br from-purple-500/5 to-pink-500/5 border-purple-500/20">
@@ -648,7 +648,7 @@ export default function PortfolioPage() {
                         <div className="p-2 rounded-lg bg-purple-500/20">
                           <Zap className="w-5 h-5 text-purple-400" />
                         </div>
-                        BullPump Tokens
+                        ArgoPump Tokens
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
